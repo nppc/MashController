@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Mash Controller</title>
+  <script src="chart.js"></script>
+
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- Drawer menu -->
+<div id="sideMenu">
+  <h2>Menu</h2>
+  <div class="menu-item" onclick="openScreen('main')">Главный экран</div>
+  <div class="menu-item" onclick="openScreen('profiles')">Профили</div>
+  <div class="menu-item" onclick="openScreen('settings')">Настройки</div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <span id="menuBtn">☰</span>
+  <h1>Mash Controller</h1>
+  <span class="status-dot" id="statusDot"></span>
+</div>
+
+<!-- MAIN SCREEN -->
+<div id="main" class="screen active">
+
+	<div class="stat-card profile-picker" onclick="openProfilePicker()">
+	  <div class="label">Profile</div>
+	  <div class="value-row">
+	    <div class="value" id="activeProfileName">--</div>
+	    <span class="chevron">›</span>
+	  </div>
+	</div>
+
+	<div class="stat-card">
+	  <div class="label">Process</div>
+
+	  <div class="state-row">
+		<span class="state-badge" id="stateBadge">Stopped</span>
+		<span class="remaining-time inactive" id="remainingTime">00:00</span>
+	  </div>
+
+	  <div class="btn-row">
+		<button class="btn green" id="btnStart" onclick="startSelectedProfile()">START</button>
+		<button class="btn hidden" id="btnPause" onclick="pauseProfile()">PAUSE</button>
+		<button class="btn green hidden" id="btnResume" onclick="resumeProfile()">RESUME</button>
+		<button class="btn gray hidden" id="btnSkip" onclick="skipStep()">SKIP</button>
+		<button class="btn hidden" id="btnStop" onclick="stopProfile()">STOP</button>
+	  </div>
+  </div>
+
+	<div class="stat-card">
+	  <div class="label">Profile Steps</div>
+	  <div id="mainStepsContainer"></div>
+	</div>
+
+  <div class="stats-row">
+    <div class="stat-card current">
+      <div class="label">Current</div>
+      <div class="value"><span id="curTemp">--</span><span class="unit">°C</span></div>
+    </div>
+    <div class="stat-card target">
+      <div class="label">Target</div>
+      <div class="value"><span id="targetTemp">--</span><span class="unit">°C</span></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-wrap">
+      <canvas id="tempChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- PROFILES SCREEN -->
+<div id="profiles" class="screen">
+
+  <div class="stat-card">
+    <div class="label">Редактор профилей</div>
+
+    <!-- Выбор профиля -->
+	<div class="profile-header">
+		<div class="profile-select-row">
+
+		  <select id="profileSelect" class="input-dark profile-select"></select>
+
+		  <button class="btn green profile-add-btn" onclick="addProfile()">
+			<span style="font-size:16px; line-height:0;">✚</span>
+		  </button>
+
+                  <!-- Кнопка удаления профиля -->
+                  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">🗑
+                </button>
+		</div>
+               
+		
+	</div>
+
+	<!-- Имя профиля -->
+			<div class="label-small">Имя профиля</div>
+	<input id="profileName" class="input-dark" type="text" 
+		   placeholder="Имя профиля" 
+		   onchange="updateProfileName(this.value)"
+		   style="margin-bottom:12px">
+
+    <!-- Контейнер шагов -->
+    <div id="stepsContainer"></div>
+
+    <div style="margin-top:16px;">
+      <button class="btn green" onclick="addStep()">Добавить шаг</button>
+      <button class="btn" onclick="saveProfiles()">Сохранить</button>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- SETTINGS SCREEN -->
+<div id="settings" class="screen">
+  <div class="stat-card">
+    <div class="label">Settings</div>
+    <p>General settings (hysteresis etc.)</p>
+  </div>
+</div>
+
+<!-- Profile picker modal -->
+<div id="profilePickerOverlay" class="modal-overlay" onclick="closeProfilePicker(event)">
+  <div class="modal-sheet">
+    <h2>Select Profile</h2>
+    <div id="profilePickerList"></div>
+  </div>
+</div>
+
+  <script src="script.js"></script>
+</body>
+</html>
