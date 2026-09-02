@@ -238,7 +238,7 @@ void handleSaveSettings() {
   if (doc.containsKey("mixerDurationSec")) {
     s.mixerDurationSec = doc["mixerDurationSec"].as<uint16_t>();
   }
-  if (doc.containsKey("mixerPercent")) {
+  if (doc.containsKey("mixerOnSec")) {
     s.mixerOnSec = doc["mixerOnSec"].as<uint8_t>();
   }
 
