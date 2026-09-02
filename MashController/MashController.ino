@@ -2,6 +2,7 @@
 #include <ESP8266WebServer.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include "Storage.h"
 
 ESP8266WebServer server(80);
 
@@ -46,7 +47,7 @@ const unsigned long READ_INTERVAL_MS = 2000;
 /* -------------------------------------------------------------------------- */
 
 void updateHeater(float currentTemp) {
-  float hysteresis = 0.5;  // prevents rapid toggling
+  float hysteresis = storage.settings().heaterHysteresis;
 
   if (!heaterOn && currentTemp < targetTemperature - hysteresis) {
     heaterOn = true;
@@ -84,37 +85,18 @@ void handleFileRead(String path) {
 /* -------------------------------------------------------------------------- */
 
 bool loadProfile(int index) {
-  File file = LittleFS.open("/profiles_data.json", "r");
-  if (!file) {
-    Serial.println("Failed to open profiles_data.json");
-    return false;
-  }
-
-  StaticJsonDocument<2048> doc;
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-
-  if (err) {
-    Serial.println("JSON parse error");
-    return false;
-  }
-
-  JsonArray arr = doc["profiles"].as<JsonArray>();
-  if (index < 0 || index >= arr.size()) {
+  ProfileEE p;
+  if (!storage.getProfile(index, p)) {
     Serial.println("Profile index out of range");
     return false;
   }
 
-  JsonObject p = arr[index];
-
-  activeProfile.name = p["name"].as<String>();
-
-  JsonArray steps = p["steps"].as<JsonArray>();
-  activeProfile.stepCount = steps.size();
+  activeProfile.name = String(p.name);
+  activeProfile.stepCount = p.stepCount;
 
   for (int i = 0; i < activeProfile.stepCount; i++) {
-    activeProfile.steps[i].temp = steps[i]["temp"].as<float>();
-    activeProfile.steps[i].time = steps[i]["time"].as<int>();
+    activeProfile.steps[i].temp = p.steps[i].temp;
+    activeProfile.steps[i].time = p.steps[i].timeMin;
   }
 
   Serial.println("Profile loaded: " + activeProfile.name);
@@ -122,8 +104,32 @@ bool loadProfile(int index) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                           SAVE PROFILES (REST API)                         */
+/*                         PROFILES (REST API, EEPROM)                        */
 /* -------------------------------------------------------------------------- */
+
+void handleGetProfiles() {
+  StaticJsonDocument<2048> doc;
+  JsonArray arr = doc.createNestedArray("profiles");
+
+  for (uint8_t i = 0; i < storage.profileCount(); i++) {
+    ProfileEE p;
+    if (!storage.getProfile(i, p)) continue;
+
+    JsonObject o = arr.createNestedObject();
+    o["name"] = p.name;
+
+    JsonArray steps = o.createNestedArray("steps");
+    for (uint8_t s = 0; s < p.stepCount; s++) {
+      JsonObject st = steps.createNestedObject();
+      st["temp"] = p.steps[s].temp;
+      st["time"] = p.steps[s].timeMin;
+    }
+  }
+
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
 
 void handleSaveProfiles() {
   String body = server.arg("plain");
@@ -134,18 +140,116 @@ void handleSaveProfiles() {
     return;
   }
 
-  File file = LittleFS.open("/profiles_data.json", "w");
-  if (!file) {
-    server.send(500, "text/plain", "File write error");
-    Serial.println("Failed to open profiles_data.json for writing");
+  StaticJsonDocument<2048> doc;
+  DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server.send(400, "text/plain", "JSON parse error");
     return;
   }
 
-  file.print(body);
-  file.close();
+  JsonArray arr = doc["profiles"].as<JsonArray>();
+  if (arr.isNull()) {
+    server.send(400, "text/plain", "Missing 'profiles' array");
+    return;
+  }
 
-  Serial.println("profiles_data.json updated");
+  if (arr.size() > STORAGE_MAX_PROFILES) {
+    server.send(400, "text/plain", "Too many profiles (max " + String(STORAGE_MAX_PROFILES) + ")");
+    return;
+  }
+
+  // Whole-list replace, mirrors the old file-overwrite behaviour but now on EEPROM.
+  storage.clearProfiles();
+
+  for (JsonObject p : arr) {
+    ProfileEE pe;
+    memset(&pe, 0, sizeof(pe));
+
+    const char *name = p["name"] | "Profile";
+    strncpy(pe.name, name, STORAGE_NAME_LEN - 1);
+
+    JsonArray steps = p["steps"].as<JsonArray>();
+    pe.stepCount = min((int)steps.size(), (int)STORAGE_MAX_STEPS);
+
+    for (uint8_t i = 0; i < pe.stepCount; i++) {
+      pe.steps[i].temp    = steps[i]["temp"].as<float>();
+      pe.steps[i].timeMin = steps[i]["time"].as<int>();
+    }
+
+    storage.setProfile(storage.profileCount(), pe);
+  }
+
+  if (!storage.save()) {
+    server.send(500, "text/plain", "EEPROM write error");
+    return;
+  }
+
+  Serial.println("Profiles saved to EEPROM");
   server.send(200, "text/plain", "Saved");
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         SETTINGS (REST API, EEPROM)                        */
+/* -------------------------------------------------------------------------- */
+
+void handleGetSettings() {
+  SettingsEE &s = storage.settings();
+  StaticJsonDocument<256> doc;
+
+  doc["wifiSSID"] = s.wifiSSID;
+  // Password is never echoed back - only whether one is currently set.
+  doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
+  doc["heaterHysteresis"] = s.heaterHysteresis;
+  doc["mixerDurationSec"] = s.mixerDurationSec;
+  doc["mixerPercent"] = s.mixerPercent;
+
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+void handleSaveSettings() {
+  String body = server.arg("plain");
+  if (body.length() == 0) {
+    server.send(400, "text/plain", "No JSON received");
+    return;
+  }
+
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server.send(400, "text/plain", "JSON parse error");
+    return;
+  }
+
+  SettingsEE &s = storage.settings();
+
+  if (doc.containsKey("wifiSSID")) {
+    strncpy(s.wifiSSID, doc["wifiSSID"] | s.wifiSSID, STORAGE_SSID_LEN - 1);
+  }
+  // Only overwrite the stored password if a non-empty one was actually sent,
+  // so the frontend can leave the password field blank to "keep current".
+  if (doc.containsKey("wifiPass") && strlen(doc["wifiPass"] | "") > 0) {
+    strncpy(s.wifiPass, doc["wifiPass"], STORAGE_PASS_LEN - 1);
+  }
+  if (doc.containsKey("heaterHysteresis")) {
+    s.heaterHysteresis = doc["heaterHysteresis"].as<float>();
+  }
+  if (doc.containsKey("mixerDurationSec")) {
+    s.mixerDurationSec = doc["mixerDurationSec"].as<uint16_t>();
+  }
+  if (doc.containsKey("mixerPercent")) {
+    s.mixerPercent = doc["mixerPercent"].as<uint8_t>();
+  }
+
+  if (!storage.save()) {
+    server.send(500, "text/plain", "EEPROM write error");
+    return;
+  }
+
+  // wifiSSID/wifiPass only take effect on next boot since WiFi.softAP()
+  // already ran in setup() by the time this request arrives.
+  server.send(200, "text/plain", "Saved (WiFi changes apply after reboot)");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -345,6 +449,7 @@ void handleStatus() {
   doc["step"] = currentStep;
   doc["stepTemp"] = targetTemperature;
   doc["currentTemp"] = readTemperature();
+  doc["heaterOn"] = heaterOn;
 
   if (isRunning) {
 
@@ -387,16 +492,25 @@ void setup() {
     Serial.println("LittleFS mount failed");
   }
 
-  WiFi.softAP("MashController", "12345678");
+  // Loads settings + profiles from EEPROM. Writes defaults on first boot
+  // or if the stored data fails its CRC check.
+  storage.begin();
+
+  SettingsEE &s = storage.settings();
+  WiFi.softAP(s.wifiSSID, s.wifiPass);
 
   server.on("/", []() { handleFileRead("/index.html"); });
   server.on("/index.html", []() { handleFileRead("/index.html"); });
   server.on("/style.css", []() { handleFileRead("/style.css"); });
   server.on("/script.js", []() { handleFileRead("/script.js"); });
   server.on("/chart.js", []() { handleFileRead("/chart.js"); });
-  server.on("/profiles_data.json", []() { handleFileRead("/profiles_data.json"); });
 
+  server.on("/profiles_data.json", HTTP_GET, handleGetProfiles);
   server.on("/saveProfiles", HTTP_POST, handleSaveProfiles);
+
+  server.on("/settings", HTTP_GET, handleGetSettings);
+  server.on("/saveSettings", HTTP_POST, handleSaveSettings);
+
   server.on("/data", handleData);
   server.on("/startProfile", HTTP_POST, handleStartProfile);
   server.on("/stopProfile", HTTP_POST, handleStopProfile);

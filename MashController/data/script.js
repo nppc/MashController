@@ -15,7 +15,7 @@ let controllerStatus = {
 
 async function updateStatus() {
   try {
-    const res = await fetch('/status');
+    const res = await fetch('status');
     const st = await res.json();
 
     controllerStatus = st;
@@ -43,7 +43,7 @@ async function startSelectedProfile() {
   try {
 
     await fetch(
-      `/startProfile?profile=${currentProfileIndex}`,
+      `startProfile?profile=${currentProfileIndex}`,
       {
         method: 'POST'
       }
@@ -60,7 +60,7 @@ async function stopProfile() {
 
   try {
 
-    await fetch('/stopProfile', {
+    await fetch('stopProfile', {
       method: 'POST'
     });
 
@@ -104,11 +104,22 @@ function updateProcessUI(st) {
   document.getElementById('btnStop').classList.toggle('hidden', !st.running);
   
   document.querySelector('.profile-picker').classList.toggle('disabled', st.running);
+
+	const editor = document.getElementById('profilesEditor');
+	const lockMsg = document.getElementById('profilesLocked');
+
+	if (editor) {
+		editor.classList.toggle('editor-disabled', st.running);
+	}
+
+	if (lockMsg) {
+		lockMsg.classList.toggle('hidden', !st.running);
+	}
 }
 
 async function pauseProfile() {
   try {
-    await fetch('/pauseProfile', { method: 'POST' });
+    await fetch('pauseProfile', { method: 'POST' });
     updateStatus();
   } catch (e) {
     console.error(e);
@@ -117,7 +128,7 @@ async function pauseProfile() {
 
 async function resumeProfile() {
   try {
-    await fetch('/resumeProfile', { method: 'POST' });
+    await fetch('resumeProfile', { method: 'POST' });
     updateStatus();
   } catch (e) {
     console.error(e);
@@ -126,7 +137,7 @@ async function resumeProfile() {
 
 async function skipStep() {
   try {
-    await fetch('/skipStep', { method: 'POST' });
+    await fetch('skipStep', { method: 'POST' });
     updateStatus();
   } catch (e) {
     console.error(e);
@@ -315,31 +326,49 @@ function renderSteps() {
 
   profile.steps.forEach((step, idx) => {
     const div = document.createElement('div');
-    div.className = 'stat-card';
-    div.style.marginTop = '12px';
+	div.className = 'profile-step-card';
 
-    div.innerHTML = `
-      <div class="label">Шаг ${idx + 1}</div>
+	div.innerHTML = `
+		<div class="profile-step-header">
+			<span class="profile-step-number">
+				Step ${idx + 1}
+			</span>
 
-      <div style="display:flex; gap:16px; align-items:flex-end; margin-top:12px;">
+			<button class="btn-trash"
+				onclick="removeStep(${idx})">
+				🗑
+			</button>
+		</div>
 
-        <div style="flex:1;">
-          <div class="label-small">Температура</div>
-          <input type="number" class="input-small"
-            value="${step.temp}"
-            onchange="updateStep(${idx}, 'temp', this.value)">
-        </div>
+		<div class="profile-step-grid">
 
-        <div style="flex:1;">
-          <div class="label-small">Время (мин)</div>
-          <input type="number" class="input-small"
-            value="${step.time}"
-            onchange="updateStep(${idx}, 'time', this.value)">
-        </div>
+			<div>
+				<div class="label-small">
+					Temperature
+				</div>
 
-        <button class="btn-trash" onclick="removeStep(${idx})">🗑</button>
-      </div>
-    `;
+				<input
+					type="number"
+					class="input-small"
+					value="${step.temp}"
+					onchange="updateStep(${idx}, 'temp', this.value)">
+			</div>
+
+			<div>
+				<div class="label-small">
+					Time (min)
+				</div>
+
+				<input
+					type="number"
+					class="input-small"
+					value="${step.time}"
+					onchange="updateStep(${idx}, 'time', this.value)">
+			</div>
+
+		</div>
+	`;
+
 
     cont.appendChild(div);
   });
@@ -349,14 +378,10 @@ function renderSteps() {
 
 
 function renderMainSteps() {
-
-  const cont =
-    document.getElementById('mainStepsContainer');
-
+  const cont = document.getElementById('mainStepsContainer');
   cont.innerHTML = '';
 
   const profile = profiles[currentProfileIndex];
-
   if (!profile) return;
 
   profile.steps.forEach((step, idx) => {
@@ -365,17 +390,27 @@ function renderMainSteps() {
       controllerStatus.running &&
       controllerStatus.step === idx;
 
+    const completed =
+      controllerStatus.running &&
+      controllerStatus.step > idx;
+
     const div = document.createElement('div');
 
-    div.style.padding = '8px';
-    div.style.marginTop = '6px';
-    div.style.borderRadius = '6px';
+    div.className =
+      'main-step' +
+      (active ? ' active' : '') +
+      (completed ? ' completed' : '');
 
-    div.style.background =
-      active ? '#3ecf8e33' : '#232a3b';
+    div.innerHTML = `
+      <div class="step-badge">${idx + 1}</div>
 
-    div.innerHTML =
-      `Step ${idx + 1}: ${step.temp}°C / ${step.time} min`;
+      <div class="step-info">
+        <div class="step-values">
+          <span class="step-temp">${step.temp}°C</span>
+          <span class="step-time">${step.time} min</span>
+        </div>
+      </div>
+    `;
 
     cont.appendChild(div);
   });
@@ -395,7 +430,7 @@ function updateStep(index, field, value) {
 /* Add step */
 function addStep() {
   const p = profiles[currentProfileIndex];
-  if (p.steps.length >= 6) return alert("Максимум 6 шагов");
+  if (p.steps.length >= 6) return showToast("Maximum 6 steps", "error");
 
   p.steps.push({ temp: 65, time: 10 });
   renderSteps();
@@ -404,7 +439,7 @@ function addStep() {
 /* Remove step */
 function removeStep(index) {
   const p = profiles[currentProfileIndex];
-  if (p.steps.length <= 1) return alert("Минимум 1 шаг");
+  if (p.steps.length <= 1) return showToast("Minimum 1 step", "error");
 
   p.steps.splice(index, 1);
   renderSteps();
@@ -421,7 +456,7 @@ async function saveProfiles() {
       body: JSON.stringify({ profiles })
     });
 
-    alert("Профили сохранены");
+    showToast("Profiles are saved");
 
     // Загружаем профили заново
     await loadProfiles();
@@ -437,42 +472,60 @@ async function saveProfiles() {
     renderSteps();
 
   } catch (e) {
-    alert("Ошибка сохранения");
+    showToast("Ошибка сохранения", "error");
     console.error(e);
   }
 }
 
 function addProfile() {
-  profiles.push({
-    name: "New Profile",
-    steps: [
-      { temp: 52, time: 20 }
-    ]
-  });
+    if (profiles.length >= 15) {
+        showToast("Maximum 15 profiles allowed");
+        return;
+    }
 
-  currentProfileIndex = profiles.length - 1;
+    const profileName = `New Profile ${profiles.length + 1}`;
 
-  const sel = document.getElementById('profileSelect');
-  sel.innerHTML = '';
+    profiles.push({
+        name: profileName,
+        steps: [{ temp: 52, time: 20 }]
+    });
 
-  profiles.forEach((p, i) => {
+    currentProfileIndex = profiles.length - 1;
+
+    const sel = document.getElementById('profileSelect');
+
     const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = p.name;
+    opt.value = currentProfileIndex;
+    opt.textContent = profileName;
+
     sel.appendChild(opt);
-  });
+    sel.value = currentProfileIndex;
 
-  sel.value = currentProfileIndex;
+    updateProfileNameField();
+    updateMainScreenProfileName();
+    renderSteps();
+    updateProfileButtons();
 
-  updateProfileNameField();
-  updateMainScreenProfileName();
-  renderSteps();
+    showToast(`Profile added (${profiles.length}/15)`);
 }
 
-function deleteProfile() {
+function updateProfileButtons() {
+    const addBtn = document.getElementById('addProfileBtn');
+
+    if (addBtn) {
+        addBtn.disabled = profiles.length >= 15;
+    }
+}
+
+async function deleteProfile() {
   if (!profiles[currentProfileIndex]) return;
 
-  if (!confirm("Удалить профиль?")) return;
+	const profile = profiles[currentProfileIndex];
+
+	if (!await showConfirm(
+		`Are you sure you want to permanently delete profile "${profile.name}"?`,
+		"Delete Profile"
+	)) return;
 
   // Удаляем профиль
   profiles.splice(currentProfileIndex, 1);
@@ -480,7 +533,7 @@ function deleteProfile() {
   // Если профилей не осталось — создаём пустой
   if (profiles.length === 0) {
     profiles.push({
-      name: "Новый профиль",
+      name: "New Profile",
       steps: [
         { temp: 52, time: 20 },
         { temp: 63, time: 40 }
@@ -544,6 +597,57 @@ function selectProfile(index) {
   if (sel) sel.value = index;
 
   document.getElementById('profilePickerOverlay').classList.remove('open');
+}
+
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (type === 'error' ? ' error' : '');
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 250);
+  }, 2500);
+}
+
+function showConfirm(message, title = "Confirm Action") {
+    return new Promise(resolve => {
+
+        const overlay = document.getElementById('confirmOverlay');
+        const msg = document.getElementById('confirmMessage');
+        const ttl = document.getElementById('confirmTitle');
+        const ok = document.getElementById('confirmOk');
+        const cancel = document.getElementById('confirmCancel');
+
+        ttl.textContent = title;
+        msg.textContent = message;
+
+        overlay.classList.remove('hidden');
+
+        const cleanup = () => {
+            overlay.classList.add('hidden');
+
+            ok.removeEventListener('click', okHandler);
+            cancel.removeEventListener('click', cancelHandler);
+        };
+
+        const okHandler = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        const cancelHandler = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        ok.addEventListener('click', okHandler);
+        cancel.addEventListener('click', cancelHandler);
+    });
 }
 
 /* Load profiles on startup */

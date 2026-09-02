@@ -83,44 +83,47 @@
 <div id="profiles" class="screen">
 
   <div class="stat-card">
-    <div class="label">Редактор профилей</div>
+	<div class="label">Profiles Editor</div>
+	  <div id="profilesLocked" class="editor-locked hidden">
+		Stop the process to edit profiles.
+	  </div>
+	<div id="profilesEditor">
+		<!-- Выбор профиля -->
+		<div class="profile-header">
+			<div class="profile-select-row">
 
-    <!-- Выбор профиля -->
-	<div class="profile-header">
-		<div class="profile-select-row">
+			  <select id="profileSelect" class="input-dark profile-select"></select>
 
-		  <select id="profileSelect" class="input-dark profile-select"></select>
+			  <button class="btn green profile-add-btn" onclick="addProfile()">
+				<span style="font-size:16px; line-height:0;">✚</span>
+			  </button>
 
-		  <button class="btn green profile-add-btn" onclick="addProfile()">
-			<span style="font-size:16px; line-height:0;">✚</span>
-		  </button>
-
-                  <!-- Кнопка удаления профиля -->
-                  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">🗑
-                </button>
+					  <!-- Кнопка удаления профиля -->
+					  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">🗑
+					</button>
+			</div>
+				   
+			
 		</div>
-               
-		
+
+		<!-- Имя профиля -->
+				<div class="label-small">Profile Name</div>
+		<input id="profileName" class="input-dark" type="text" 
+			   placeholder="Имя профиля" 
+			   onchange="updateProfileName(this.value)"
+			   style="margin-bottom:12px">
+
+		<!-- Контейнер шагов -->
+		<div id="stepsContainer"></div>
+
+		<div class="profile-actions">
+		  <button class="btn green" onclick="addStep()">Add step</button>
+		  <button class="btn" onclick="saveProfiles()">Save Profiles</button>
+		</div>
+	  </div>
 	</div>
-
-	<!-- Имя профиля -->
-			<div class="label-small">Имя профиля</div>
-	<input id="profileName" class="input-dark" type="text" 
-		   placeholder="Имя профиля" 
-		   onchange="updateProfileName(this.value)"
-		   style="margin-bottom:12px">
-
-    <!-- Контейнер шагов -->
-    <div id="stepsContainer"></div>
-
-    <div style="margin-top:16px;">
-      <button class="btn green" onclick="addStep()">Добавить шаг</button>
-      <button class="btn" onclick="saveProfiles()">Сохранить</button>
-    </div>
-  </div>
-
 </div>
-
+	
 
 <!-- SETTINGS SCREEN -->
 <div id="settings" class="screen">
@@ -136,6 +139,23 @@
     <h2>Select Profile</h2>
     <div id="profilePickerList"></div>
   </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<div id="confirmOverlay" class="confirm-overlay hidden">
+    <div class="confirm-modal">
+        <h3 id="confirmTitle">Confirm Action</h3>
+
+        <p id="confirmMessage">
+            Are you sure?
+        </p>
+
+        <div class="confirm-actions">
+			<button id="confirmCancel" class="btn">Cancel</button>
+			<button id="confirmOk" class="btn">Confirm</button>        
+		</div>
+    </div>
 </div>
 
   <script src="script.js"></script>
