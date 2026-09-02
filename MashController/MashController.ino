@@ -201,7 +201,7 @@ void handleGetSettings() {
   doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
   doc["heaterHysteresis"] = s.heaterHysteresis;
   doc["mixerDurationSec"] = s.mixerDurationSec;
-  doc["mixerPercent"] = s.mixerPercent;
+  doc["mixerOnSec"] = s.mixerOnSec;
 
   String out;
   serializeJson(doc, out);
@@ -239,7 +239,7 @@ void handleSaveSettings() {
     s.mixerDurationSec = doc["mixerDurationSec"].as<uint16_t>();
   }
   if (doc.containsKey("mixerPercent")) {
-    s.mixerPercent = doc["mixerPercent"].as<uint8_t>();
+    s.mixerOnSec = doc["mixerOnSec"].as<uint8_t>();
   }
 
   if (!storage.save()) {

@@ -15,9 +15,9 @@
 <!-- Drawer menu -->
 <div id="sideMenu">
   <h2>Menu</h2>
-  <div class="menu-item" onclick="openScreen('main')">Главный экран</div>
-  <div class="menu-item" onclick="openScreen('profiles')">Профили</div>
-  <div class="menu-item" onclick="openScreen('settings')">Настройки</div>
+  <div class="menu-item" onclick="openScreen('main')">Home</div>
+  <div class="menu-item" onclick="openScreen('profiles')">Ptofiles</div>
+  <div class="menu-item" onclick="openScreen('settings')">Settings</div>
 </div>
 
 <!-- Header -->
@@ -45,7 +45,6 @@
 		<span class="state-badge" id="stateBadge">Stopped</span>
 		<span class="remaining-time inactive" id="remainingTime">00:00</span>
 	  </div>
-
 	  <div class="btn-row">
 		<button class="btn green" id="btnStart" onclick="startSelectedProfile()">START</button>
 		<button class="btn hidden" id="btnPause" onclick="pauseProfile()">PAUSE</button>
@@ -76,6 +75,11 @@
       <canvas id="tempChart"></canvas>
     </div>
   </div>
+
+	<div class="heater-row">
+		<span class="heater-label">Heater</span>
+		<span class="heater-badge off" id="heaterBadge">OFF</span>
+	</div>
 
 </div>
 
@@ -127,10 +131,100 @@
 
 <!-- SETTINGS SCREEN -->
 <div id="settings" class="screen">
+
   <div class="stat-card">
-    <div class="label">Settings</div>
-    <p>General settings (hysteresis etc.)</p>
+    <div class="label">Temperature Control</div>
+
+    <div class="settings-group">
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-title">Heater Hysteresis</div>
+          <div class="setting-desc">
+            Temperature band before heater switches.
+          </div>
+        </div>
+
+        <input
+          id="setHysteresis"
+          class="input-small"
+          type="number"
+          step="0.1"
+          min="0.1"
+          max="5.0">
+      </div>
+
+    </div>
   </div>
+
+  <div class="stat-card">
+    <div class="label">Mixer</div>
+
+    <div class="settings-group">
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-title">Run Duration</div>
+          <div class="setting-desc">
+            Mixer run time in seconds.
+          </div>
+        </div>
+
+        <input
+          id="setMixerDuration"
+          class="input-small"
+          type="number"
+          min="1"
+          max="300">
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-title">Power</div>
+          <div class="setting-desc">
+            PWM duty cycle percentage.
+          </div>
+        </div>
+
+        <input
+          id="setMixerPower"
+          class="input-small"
+          type="number"
+          min="0"
+          max="100">
+      </div>
+
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="label">Network</div>
+
+    <div class="settings-group">
+
+      <div class="label-small">WiFi SSID</div>
+      <input
+        id="setWifiSsid"
+        class="input-dark"
+        type="text">
+
+      <div class="label-small" style="margin-top:12px;">
+        WiFi Password
+      </div>
+
+      <input
+        id="setWifiPass"
+        class="input-dark"
+        type="password"
+        placeholder="Leave empty to keep unchanged">
+    </div>
+  </div>
+
+  <button class="btn green settings-save-btn"
+          onclick="saveSettings()">
+    Save Settings
+  </button>
+
 </div>
 
 <!-- Profile picker modal -->

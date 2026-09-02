@@ -115,6 +115,14 @@ function updateProcessUI(st) {
 	if (lockMsg) {
 		lockMsg.classList.toggle('hidden', !st.running);
 	}
+
+	const heater = document.getElementById('heaterBadge');
+
+	if (heater) {
+		heater.textContent = st.heaterOn ? 'ON' : 'OFF';
+		heater.classList.toggle('on', st.heaterOn);
+		heater.classList.toggle('off', !st.heaterOn);
+	}
 }
 
 async function pauseProfile() {
@@ -599,6 +607,70 @@ function selectProfile(index) {
   document.getElementById('profilePickerOverlay').classList.remove('open');
 }
 
+
+let settings = {};
+
+async function loadSettings() {
+    try {
+        const res = await fetch('settings');
+        settings = await res.json();
+
+        document.getElementById('setHysteresis').value =
+            settings.heaterHysteresis ?? 0.5;
+
+        document.getElementById('setMixerDuration').value =
+            settings.mixerDurationSec ?? 10;
+
+        document.getElementById('setMixerPower').value =
+            settings.mixerOnSec ?? 50;
+
+        document.getElementById('setWifiSsid').value =
+            settings.wifiSSID ?? '';
+
+    } catch (e) {
+        console.error('Settings load error', e);
+        showToast('Failed to load settings', 'error');
+    }
+}
+
+async function saveSettings() {
+    try {
+
+        const payload = {
+            heaterHysteresis: parseFloat(
+                document.getElementById('setHysteresis').value
+            ),
+
+            mixerDurationSec: parseInt(
+                document.getElementById('setMixerDuration').value
+            ),
+
+            mixerOnSec: parseInt(
+                document.getElementById('setMixerPower').value
+            ),
+
+            wifiSSID: document.getElementById('setWifiSsid').value,
+
+            wifiPass: document.getElementById('setWifiPass').value
+        };
+
+        await fetch('saveSettings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        showToast('Settings saved');
+
+    } catch (e) {
+        console.error(e);
+        showToast('Settings save failed', 'error');
+    }
+}
+
+
 function showToast(message, type = 'success') {
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
@@ -650,5 +722,6 @@ function showConfirm(message, title = "Confirm Action") {
     });
 }
 
-/* Load profiles on startup */
+/* Load profiles and Settings on startup */
 loadProfiles();
+loadSettings();

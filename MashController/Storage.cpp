@@ -31,7 +31,7 @@ void Storage::loadDefaults() {
   strncpy(_data.settings.wifiPass, "12345678", STORAGE_PASS_LEN - 1);
   _data.settings.heaterHysteresis = 0.5f;
   _data.settings.mixerDurationSec = 60;
-  _data.settings.mixerPercent     = 30;
+  _data.settings.mixerOnSec     = 30;
 
   _data.profileCount = 0;
 
