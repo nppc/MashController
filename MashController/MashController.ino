@@ -19,6 +19,11 @@ bool waitingForTemp = false;
 
 bool heaterOn = false;
 
+/* ---- Mixer state ---- */
+bool mixerOn = false;              // relay state
+bool mixerManualMode = false;      // false = auto (on/rest cycle), true = manual override
+unsigned long mixerPhaseStart = 0; // millis() when current on/rest phase began
+
 unsigned long stepStartTime = 0;
 unsigned long stepDurationSec = 0;
 unsigned long pausedElapsedSec = 0;   // elapsed time banked when paused
@@ -54,6 +59,37 @@ void updateHeater(float currentTemp) {
   }
   else if (heaterOn && currentTemp > targetTemperature + hysteresis) {
     heaterOn = false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               MIXER HANDLING                               */
+/* -------------------------------------------------------------------------- */
+
+// Seconds remaining in the current phase (on-phase in manual+on, or the
+// auto on/rest phase). Used for the status endpoint's countdown.
+unsigned long mixerRemainingSec() {
+  SettingsEE &s = storage.settings();
+  unsigned long phaseLen = mixerOn ? s.mixerOnSec : s.mixerRestSec;
+  unsigned long elapsed = (millis() - mixerPhaseStart) / 1000;
+  if (elapsed >= phaseLen) return 0;
+  return phaseLen - elapsed;
+}
+
+void updateMixer() {
+  if (mixerManualMode) {
+    // Manual mode: relay state is whatever the last /mixerToggle set it to.
+    // No automatic phase switching here.
+    return;
+  }
+
+  SettingsEE &s = storage.settings();
+  unsigned long phaseLen = mixerOn ? s.mixerOnSec : s.mixerRestSec;
+  unsigned long elapsed = (millis() - mixerPhaseStart) / 1000;
+
+  if (elapsed >= phaseLen) {
+    mixerOn = !mixerOn;
+    mixerPhaseStart = millis();
   }
 }
 
@@ -200,8 +236,8 @@ void handleGetSettings() {
   // Password is never echoed back - only whether one is currently set.
   doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
   doc["heaterHysteresis"] = s.heaterHysteresis;
-  doc["mixerDurationSec"] = s.mixerDurationSec;
   doc["mixerOnSec"] = s.mixerOnSec;
+  doc["mixerRestSec"] = s.mixerRestSec;
 
   String out;
   serializeJson(doc, out);
@@ -235,11 +271,11 @@ void handleSaveSettings() {
   if (doc.containsKey("heaterHysteresis")) {
     s.heaterHysteresis = doc["heaterHysteresis"].as<float>();
   }
-  if (doc.containsKey("mixerDurationSec")) {
-    s.mixerDurationSec = doc["mixerDurationSec"].as<uint16_t>();
-  }
   if (doc.containsKey("mixerOnSec")) {
-    s.mixerOnSec = doc["mixerOnSec"].as<uint8_t>();
+    s.mixerOnSec = doc["mixerOnSec"].as<uint16_t>();
+  }
+  if (doc.containsKey("mixerRestSec")) {
+    s.mixerRestSec = doc["mixerRestSec"].as<uint16_t>();
   }
 
   if (!storage.save()) {
@@ -401,6 +437,12 @@ void handleStartProfile() {
   stepDurationSec = activeProfile.steps[0].time * 60;
   pausedElapsedSec = 0;
 
+  // Hand the mixer to auto, starting a fresh rest phase, regardless of
+  // whatever mode/state it was left in before the mash started.
+  mixerManualMode = false;
+  mixerOn = false;
+  mixerPhaseStart = millis();
+
   server.send(200, "text/plain", "Started");
 }
 
@@ -409,6 +451,11 @@ void handleStopProfile() {
   isPaused = false;
   waitingForTemp = false;
   targetTemperature = 20.0;   // <<< RESET
+
+  // Mixer shouldn't keep cycling with nothing being mashed.
+  mixerManualMode = true;
+  mixerOn = false;
+
   server.send(200, "text/plain", "Stopped");
 }
 
@@ -419,6 +466,10 @@ void handlePauseProfile() {
       pausedElapsedSec = elapsed;
     }
     isPaused = true;
+
+    // Mixer shouldn't keep running while the mash itself is paused.
+    mixerManualMode = true;
+    mixerOn = false;
   }
   server.send(200, "text/plain", "Paused");
 }
@@ -429,6 +480,12 @@ void handleResumeProfile() {
       stepStartTime = millis() - (pausedElapsedSec * 1000);
     }
     isPaused = false;
+
+    // Hand the mixer back to auto, starting a fresh rest phase rather
+    // than resuming wherever the cycle was before it got paused off.
+    mixerManualMode = false;
+    mixerOn = false;
+    mixerPhaseStart = millis();
   }
   server.send(200, "text/plain", "Resumed");
 }
@@ -438,6 +495,36 @@ void handleSkipStep() {
     advanceStep();
   }
   server.send(200, "text/plain", "Skipped");
+}
+
+void handleMixerMode() {
+  String mode = server.arg("mode");
+
+  if (mode == "manual") {
+    mixerManualMode = true;
+    // Freeze the relay in its current state; the badge becomes a toggle.
+  } else if (mode == "auto") {
+    mixerManualMode = false;
+    // Resume the on/rest cycle from a fresh phase boundary rather than
+    // wherever manual mode happened to leave the relay.
+    mixerPhaseStart = millis();
+  } else {
+    server.send(400, "text/plain", "mode must be 'auto' or 'manual'");
+    return;
+  }
+
+  server.send(200, "text/plain", "OK");
+}
+
+void handleMixerToggle() {
+  if (!mixerManualMode) {
+    server.send(409, "text/plain", "Mixer is in auto mode");
+    return;
+  }
+
+  mixerOn = !mixerOn;
+  mixerPhaseStart = millis();
+  server.send(200, "text/plain", mixerOn ? "On" : "Off");
 }
 
 void handleStatus() {
@@ -450,6 +537,10 @@ void handleStatus() {
   doc["stepTemp"] = targetTemperature;
   doc["currentTemp"] = readTemperature();
   doc["heaterOn"] = heaterOn;
+
+  doc["mixerOn"] = mixerOn;
+  doc["mixerMode"] = mixerManualMode ? "manual" : "auto";
+  doc["mixerRemaining"] = mixerManualMode ? 0 : mixerRemainingSec();
 
   if (isRunning) {
 
@@ -517,6 +608,8 @@ void setup() {
   server.on("/pauseProfile", HTTP_POST, handlePauseProfile);
   server.on("/resumeProfile", HTTP_POST, handleResumeProfile);
   server.on("/skipStep", HTTP_POST, handleSkipStep);
+  server.on("/mixerMode", HTTP_POST, handleMixerMode);
+  server.on("/mixerToggle", HTTP_POST, handleMixerToggle);
   server.on("/status", handleStatus);
 
   server.begin();
@@ -535,6 +628,8 @@ void loop() {
 
     float t = readTemperature();
     addTemp(t);
+
+    updateMixer();
 
     if (isRunning && !isPaused) {
       float currentTemp = t;

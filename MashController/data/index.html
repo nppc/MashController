@@ -19,213 +19,234 @@
   <div class="menu-item" onclick="openScreen('profiles')">Ptofiles</div>
   <div class="menu-item" onclick="openScreen('settings')">Settings</div>
 </div>
+<div id="sideMenuBackdrop"></div>
 
-<!-- Header -->
-<div class="header">
-  <span id="menuBtn">☰</span>
-  <h1>Mash Controller</h1>
-  <span class="status-dot" id="statusDot"></span>
-</div>
+<div id="app">
 
-<!-- MAIN SCREEN -->
-<div id="main" class="screen active">
-
-	<div class="stat-card profile-picker" onclick="openProfilePicker()">
-	  <div class="label">Profile</div>
-	  <div class="value-row">
-	    <div class="value" id="activeProfileName">--</div>
-	    <span class="chevron">›</span>
-	  </div>
+	<!-- Header -->
+	<div class="header">
+	  <span id="menuBtn">☰</span>
+	  <h1>Mash Controller</h1>
+	  <span class="status-dot" id="statusDot"></span>
 	</div>
 
-	<div class="stat-card">
-	  <div class="label">Process</div>
+	<!-- MAIN SCREEN -->
+	<div id="main" class="screen active">
 
-	  <div class="state-row">
-		<span class="state-badge" id="stateBadge">Stopped</span>
-		<span class="remaining-time inactive" id="remainingTime">00:00</span>
+		<div class="stat-card profile-picker" onclick="openProfilePicker()">
+		  <div class="label">Profile</div>
+		  <div class="value-row">
+			<div class="value" id="activeProfileName">--</div>
+			<span class="chevron">›</span>
+		  </div>
+		</div>
+
+		<div class="stat-card">
+		  <div class="label">Process</div>
+
+		  <div class="state-row">
+			<span class="state-badge" id="stateBadge">Stopped</span>
+			<span class="remaining-time inactive" id="remainingTime">00:00</span>
+		  </div>
+		  <div class="btn-row">
+			<button class="btn green" id="btnStart" onclick="startSelectedProfile()">START</button>
+			<button class="btn hidden" id="btnPause" onclick="pauseProfile()">PAUSE</button>
+			<button class="btn green hidden" id="btnResume" onclick="resumeProfile()">RESUME</button>
+			<button class="btn gray hidden" id="btnSkip" onclick="skipStep()">SKIP</button>
+			<button class="btn hidden" id="btnStop" onclick="stopProfile()">STOP</button>
+		  </div>
 	  </div>
-	  <div class="btn-row">
-		<button class="btn green" id="btnStart" onclick="startSelectedProfile()">START</button>
-		<button class="btn hidden" id="btnPause" onclick="pauseProfile()">PAUSE</button>
-		<button class="btn green hidden" id="btnResume" onclick="resumeProfile()">RESUME</button>
-		<button class="btn gray hidden" id="btnSkip" onclick="skipStep()">SKIP</button>
-		<button class="btn hidden" id="btnStop" onclick="stopProfile()">STOP</button>
+
+		<div class="stat-card">
+		  <div class="label">Profile Steps</div>
+		  <div id="mainStepsContainer"></div>
+		</div>
+
+	  <div class="stats-row">
+		<div class="stat-card current">
+		  <div class="label">Current</div>
+		  <div class="value"><span id="curTemp">--</span><span class="unit">°C</span></div>
+		</div>
+		<div class="stat-card target">
+		  <div class="label">Target</div>
+		  <div class="value"><span id="targetTemp">--</span><span class="unit">°C</span></div>
+		</div>
 	  </div>
-  </div>
 
-	<div class="stat-card">
-	  <div class="label">Profile Steps</div>
-	  <div id="mainStepsContainer"></div>
-	</div>
-
-  <div class="stats-row">
-    <div class="stat-card current">
-      <div class="label">Current</div>
-      <div class="value"><span id="curTemp">--</span><span class="unit">°C</span></div>
-    </div>
-    <div class="stat-card target">
-      <div class="label">Target</div>
-      <div class="value"><span id="targetTemp">--</span><span class="unit">°C</span></div>
-    </div>
-  </div>
-
-  <div class="chart-card">
-    <div class="chart-wrap">
-      <canvas id="tempChart"></canvas>
-    </div>
-  </div>
-
-	<div class="heater-row">
-		<span class="heater-label">Heater</span>
-		<span class="heater-badge off" id="heaterBadge">OFF</span>
-	</div>
-
-</div>
-
-<!-- PROFILES SCREEN -->
-<div id="profiles" class="screen">
-
-  <div class="stat-card">
-	<div class="label">Profiles Editor</div>
-	  <div id="profilesLocked" class="editor-locked hidden">
-		Stop the process to edit profiles.
+	  <div class="chart-card">
+		<div class="chart-wrap">
+		  <canvas id="tempChart"></canvas>
+		</div>
 	  </div>
-	<div id="profilesEditor">
-		<!-- Выбор профиля -->
-		<div class="profile-header">
-			<div class="profile-select-row">
 
-			  <select id="profileSelect" class="input-dark profile-select"></select>
+		<div class="device-status-row">
 
-			  <button class="btn green profile-add-btn" onclick="addProfile()">
-				<span style="font-size:16px; line-height:0;">✚</span>
-			  </button>
-
-					  <!-- Кнопка удаления профиля -->
-					  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">🗑
-					</button>
+			<div class="device-status-item">
+				<span class="heater-label">Heater</span>
+				<span class="heater-badge off" id="heaterBadge">OFF</span>
 			</div>
-				   
-			
+
+			<span class="device-status-divider"></span>
+
+			<div class="device-status-item">
+				<span class="heater-label">Mixer</span>
+				<button class="heater-badge off" id="mixerBadge" onclick="onMixerBadgeClick()">OFF</button>
+				<div class="mode-toggle" id="mixerModeToggle" onclick="toggleMixerMode()">
+					<span class="mode-toggle-option active" id="mixerAutoLabel">Auto</span>
+					<span class="mode-toggle-option" id="mixerManLabel">Man</span>
+				</div>
+			</div>
+
 		</div>
 
-		<!-- Имя профиля -->
-				<div class="label-small">Profile Name</div>
-		<input id="profileName" class="input-dark" type="text" 
-			   placeholder="Имя профиля" 
-			   onchange="updateProfileName(this.value)"
-			   style="margin-bottom:12px">
+	</div>
 
-		<!-- Контейнер шагов -->
-		<div id="stepsContainer"></div>
+	<!-- PROFILES SCREEN -->
+	<div id="profiles" class="screen">
 
-		<div class="profile-actions">
-		  <button class="btn green" onclick="addStep()">Add step</button>
-		  <button class="btn" onclick="saveProfiles()">Save Profiles</button>
+	  <div class="stat-card">
+		<div class="label">Profiles Editor</div>
+		  <div id="profilesLocked" class="editor-locked hidden">
+			Stop the process to edit profiles.
+		  </div>
+		<div id="profilesEditor">
+			<!-- Выбор профиля -->
+			<div class="profile-header">
+				<div class="profile-select-row">
+
+				  <select id="profileSelect" class="input-dark profile-select"></select>
+
+				  <button class="btn green profile-add-btn" onclick="addProfile()">
+					<span style="font-size:16px; line-height:0;">✚</span>
+				  </button>
+
+						  <!-- Кнопка удаления профиля -->
+						  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">🗑
+						</button>
+				</div>
+					   
+				
+			</div>
+
+			<!-- Имя профиля -->
+					<div class="label-small">Profile Name</div>
+			<input id="profileName" class="input-dark" type="text" 
+				   placeholder="Имя профиля" 
+				   onchange="updateProfileName(this.value)"
+				   style="margin-bottom:12px">
+
+			<!-- Контейнер шагов -->
+			<div id="stepsContainer"></div>
+
+			<div class="profile-actions">
+			  <button class="btn green" onclick="addStep()">Add step</button>
+			  <button class="btn" onclick="saveProfiles()">Save Profiles</button>
+			</div>
+		  </div>
+		</div>
+	</div>
+		
+
+	<!-- SETTINGS SCREEN -->
+	<div id="settings" class="screen">
+
+	  <div class="stat-card">
+		<div class="label">Temperature Control</div>
+
+		<div class="settings-group">
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Heater Hysteresis</div>
+			  <div class="setting-desc">
+				Temperature band before heater switches.
+			  </div>
+			</div>
+
+			<input
+			  id="setHysteresis"
+			  class="input-small"
+			  type="number"
+			  step="0.1"
+			  min="0.1"
+			  max="5.0">
+		  </div>
+
 		</div>
 	  </div>
+
+	  <div class="stat-card">
+		<div class="label">Mixer</div>
+
+		<div class="settings-group">
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Mixer On Time</div>
+			  <div class="setting-desc">
+				Seconds the mixer runs per cycle.
+			  </div>
+			</div>
+
+			<input
+			  id="setMixerOnSec"
+			  class="input-small"
+			  type="number"
+			  min="1"
+			  max="300">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Mixer Rest Time</div>
+			  <div class="setting-desc">
+				Seconds it rests between runs.
+			  </div>
+			</div>
+
+			<input
+			  id="setMixerRestSec"
+			  class="input-small"
+			  type="number"
+			  min="0"
+			  max="600">
+		  </div>
+
+		</div>
+	  </div>
+
+	  <div class="stat-card">
+		<div class="label">Network</div>
+
+		<div class="settings-group">
+
+		  <div class="label-small">WiFi SSID</div>
+		  <input
+			id="setWifiSsid"
+			class="input-dark"
+			type="text">
+
+		  <div class="label-small" style="margin-top:12px;">
+			WiFi Password
+		  </div>
+
+		  <input
+			id="setWifiPass"
+			class="input-dark"
+			type="password"
+			placeholder="Leave empty to keep unchanged">
+		</div>
+	  </div>
+
+	  <button class="btn green settings-save-btn"
+			  onclick="saveSettings()">
+		Save Settings
+	  </button>
+
 	</div>
-</div>
-	
 
-<!-- SETTINGS SCREEN -->
-<div id="settings" class="screen">
+</div><!-- /#app -->
 
-  <div class="stat-card">
-    <div class="label">Temperature Control</div>
-
-    <div class="settings-group">
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-title">Heater Hysteresis</div>
-          <div class="setting-desc">
-            Temperature band before heater switches.
-          </div>
-        </div>
-
-        <input
-          id="setHysteresis"
-          class="input-small"
-          type="number"
-          step="0.1"
-          min="0.1"
-          max="5.0">
-      </div>
-
-    </div>
-  </div>
-
-  <div class="stat-card">
-    <div class="label">Mixer</div>
-
-    <div class="settings-group">
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-title">Run Duration</div>
-          <div class="setting-desc">
-            Mixer run time in seconds.
-          </div>
-        </div>
-
-        <input
-          id="setMixerDuration"
-          class="input-small"
-          type="number"
-          min="1"
-          max="300">
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-title">Power</div>
-          <div class="setting-desc">
-            PWM duty cycle percentage.
-          </div>
-        </div>
-
-        <input
-          id="setMixerPower"
-          class="input-small"
-          type="number"
-          min="0"
-          max="100">
-      </div>
-
-    </div>
-  </div>
-
-  <div class="stat-card">
-    <div class="label">Network</div>
-
-    <div class="settings-group">
-
-      <div class="label-small">WiFi SSID</div>
-      <input
-        id="setWifiSsid"
-        class="input-dark"
-        type="text">
-
-      <div class="label-small" style="margin-top:12px;">
-        WiFi Password
-      </div>
-
-      <input
-        id="setWifiPass"
-        class="input-dark"
-        type="password"
-        placeholder="Leave empty to keep unchanged">
-    </div>
-  </div>
-
-  <button class="btn green settings-save-btn"
-          onclick="saveSettings()">
-    Save Settings
-  </button>
-
-</div>
 
 <!-- Profile picker modal -->
 <div id="profilePickerOverlay" class="modal-overlay" onclick="closeProfilePicker(event)">

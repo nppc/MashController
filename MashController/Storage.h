@@ -15,7 +15,7 @@
 #define STORAGE_PASS_LEN     24
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      2             // bump if the struct layout changes
+#define STORAGE_VERSION      3             // bump if the struct layout changes
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
@@ -36,7 +36,7 @@ struct SettingsEE {
   char     wifiSSID[STORAGE_SSID_LEN];
   char     wifiPass[STORAGE_PASS_LEN];
   float    heaterHysteresis;     // degrees C either side of target
-  uint16_t mixerDurationSec;     // length of the mix cycle window
+  uint8_t  mixerRestSec;         // length of the rest period
   uint8_t  mixerOnSec;           // seconds of mixerDurationSec the motor runs
 };
 

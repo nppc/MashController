@@ -1,7 +1,38 @@
 /* MENU */
-document.getElementById('menuBtn').onclick = () => {
-  document.getElementById('sideMenu').classList.toggle('open');
+const sideMenu = document.getElementById('sideMenu');
+const menuBtn = document.getElementById('menuBtn');
+const sideMenuBackdrop = document.getElementById('sideMenuBackdrop');
+
+function closeSideMenu() {
+  sideMenu.classList.remove('open');
+  sideMenuBackdrop.classList.remove('open');
+}
+
+function openSideMenu() {
+  sideMenu.classList.add('open');
+  sideMenuBackdrop.classList.add('open');
+}
+
+menuBtn.onclick = (e) => {
+  e.stopPropagation();
+  sideMenu.classList.contains('open') ? closeSideMenu() : openSideMenu();
 };
+
+sideMenuBackdrop.onclick = closeSideMenu;
+
+document.addEventListener('click', (e) => {
+  if (
+    sideMenu.classList.contains('open') &&
+    !sideMenu.contains(e.target) &&
+    e.target !== menuBtn
+  ) {
+    closeSideMenu();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSideMenu();
+});
 
 /* CONTROLLER STATUS AND PROCESS */
 let controllerStatus = {
@@ -123,6 +154,64 @@ function updateProcessUI(st) {
 		heater.classList.toggle('on', st.heaterOn);
 		heater.classList.toggle('off', !st.heaterOn);
 	}
+
+	renderMixerStatus(st);
+}
+
+/* MIXER: mode toggle + manual override */
+
+// Server is the source of truth for mode; default to auto until first status arrives.
+let mixerMode = 'auto';
+
+function renderMixerStatus(st) {
+	// Keep local mode in sync with whatever the firmware reports.
+	if (st.mixerMode) mixerMode = st.mixerMode;
+
+	const badge = document.getElementById('mixerBadge');
+	const autoLabel = document.getElementById('mixerAutoLabel');
+	const manLabel = document.getElementById('mixerManLabel');
+
+	if (!badge) return;
+
+	autoLabel.classList.toggle('active', mixerMode === 'auto');
+	manLabel.classList.toggle('active', mixerMode === 'manual');
+	badge.classList.toggle('manual', mixerMode === 'manual');
+
+	badge.classList.toggle('on', !!st.mixerOn);
+	badge.classList.toggle('off', !st.mixerOn);
+
+	if (mixerMode === 'manual') {
+		badge.textContent = st.mixerOn ? 'ON' : 'OFF';
+	} else {
+		badge.textContent = Number(st.mixerRemaining || 0) + 's';
+	}
+}
+
+async function toggleMixerMode() {
+	mixerMode = (mixerMode === 'auto') ? 'manual' : 'auto';
+
+	// Optimistic UI update, then confirm with the server.
+	document.getElementById('mixerAutoLabel').classList.toggle('active', mixerMode === 'auto');
+	document.getElementById('mixerManLabel').classList.toggle('active', mixerMode === 'manual');
+	document.getElementById('mixerBadge').classList.toggle('manual', mixerMode === 'manual');
+
+	try {
+		await fetch(`mixerMode?mode=${mixerMode}`, { method: 'POST' });
+		updateStatus();
+	} catch (e) {
+		console.error(e);
+	}
+}
+
+async function onMixerBadgeClick() {
+	if (mixerMode !== 'manual') return; // read-only in auto mode
+
+	try {
+		await fetch('mixerToggle', { method: 'POST' });
+		updateStatus();
+	} catch (e) {
+		console.error(e);
+	}
 }
 
 async function pauseProfile() {
@@ -155,7 +244,7 @@ async function skipStep() {
 function openScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  document.getElementById('sideMenu').classList.remove('open');
+  closeSideMenu();
 }
 
 /* YOUR ORIGINAL CHART CODE */
@@ -618,11 +707,11 @@ async function loadSettings() {
         document.getElementById('setHysteresis').value =
             settings.heaterHysteresis ?? 0.5;
 
-        document.getElementById('setMixerDuration').value =
-            settings.mixerDurationSec ?? 10;
+        document.getElementById('setMixerOnSec').value =
+            settings.mixerOnSec ?? 10;
 
-        document.getElementById('setMixerPower').value =
-            settings.mixerOnSec ?? 50;
+        document.getElementById('setMixerRestSec').value =
+            settings.mixerRestSec ?? 50;
 
         document.getElementById('setWifiSsid').value =
             settings.wifiSSID ?? '';
@@ -641,12 +730,12 @@ async function saveSettings() {
                 document.getElementById('setHysteresis').value
             ),
 
-            mixerDurationSec: parseInt(
-                document.getElementById('setMixerDuration').value
+            mixerOnSec: parseInt(
+                document.getElementById('setMixerOnSec').value
             ),
 
-            mixerOnSec: parseInt(
-                document.getElementById('setMixerPower').value
+            mixerRestSec: parseInt(
+                document.getElementById('setMixerRestSec').value
             ),
 
             wifiSSID: document.getElementById('setWifiSsid').value,

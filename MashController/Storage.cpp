@@ -30,8 +30,8 @@ void Storage::loadDefaults() {
   strncpy(_data.settings.wifiSSID, "MashController", STORAGE_SSID_LEN - 1);
   strncpy(_data.settings.wifiPass, "12345678", STORAGE_PASS_LEN - 1);
   _data.settings.heaterHysteresis = 0.5f;
-  _data.settings.mixerDurationSec = 60;
-  _data.settings.mixerOnSec     = 30;
+  _data.settings.mixerRestSec   = 15;
+  _data.settings.mixerOnSec     = 5;
 
   _data.profileCount = 0;
 
