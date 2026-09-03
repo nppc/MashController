@@ -24,6 +24,9 @@ bool mixerOn = false;              // relay state
 bool mixerManualMode = false;      // false = auto (on/rest cycle), true = manual override
 unsigned long mixerPhaseStart = 0; // millis() when current on/rest phase began
 
+bool inCoolDown = false;                    // Cool-down phase active
+unsigned long coolDownStart = 0;            // When cool-down began
+
 unsigned long stepStartTime = 0;
 unsigned long stepDurationSec = 0;
 unsigned long pausedElapsedSec = 0;   // elapsed time banked when paused
@@ -238,6 +241,7 @@ void handleGetSettings() {
   doc["heaterHysteresis"] = s.heaterHysteresis;
   doc["mixerOnSec"] = s.mixerOnSec;
   doc["mixerRestSec"] = s.mixerRestSec;
+  doc["coolDownSec"] = s.coolDownSec;
 
   String out;
   serializeJson(doc, out);
@@ -272,10 +276,14 @@ void handleSaveSettings() {
     s.heaterHysteresis = doc["heaterHysteresis"].as<float>();
   }
   if (doc.containsKey("mixerOnSec")) {
-    s.mixerOnSec = doc["mixerOnSec"].as<uint16_t>();
+    s.mixerOnSec = doc["mixerOnSec"].as<uint8_t>();
   }
   if (doc.containsKey("mixerRestSec")) {
-    s.mixerRestSec = doc["mixerRestSec"].as<uint16_t>();
+    s.mixerRestSec = doc["mixerRestSec"].as<uint8_t>();
+  }
+
+  if (doc.containsKey("coolDownSec")) {
+	s.coolDownSec = doc["coolDownSec"].as<uint16_t>();
   }
 
   if (!storage.save()) {
@@ -386,11 +394,18 @@ void advanceStep() {
   currentStep++;
 
   if (currentStep >= activeProfile.stepCount) {
-    isRunning = false;
-    isPaused = false;
-    waitingForTemp = false;
+    heaterOn = false;           // Turn off heater immediately
     targetTemperature = 20.0;
-    Serial.println("Profile finished, reset to default");
+    
+    // Start cool-down: mixer runs in AUTO mode to circulate while cooling
+    mixerManualMode = false;    // Switch to AUTO for cool-down circulation
+    mixerOn = false;            // Will cycle on/rest per settings
+    mixerPhaseStart = millis();
+    
+    inCoolDown = true;          // Mark we're in cool-down phase
+    coolDownStart = millis();
+    
+    Serial.println("Profile finished, entering cool-down phase...");
   } else {
     targetTemperature = activeProfile.steps[currentStep].temp;
     stepDurationSec = activeProfile.steps[currentStep].time * 60;
@@ -450,11 +465,14 @@ void handleStopProfile() {
   isRunning = false;
   isPaused = false;
   waitingForTemp = false;
-  targetTemperature = 20.0;   // <<< RESET
+  targetTemperature = 20.0;
+  heaterOn = false;
 
   // Mixer shouldn't keep cycling with nothing being mashed.
   mixerManualMode = true;
   mixerOn = false;
+  
+  inCoolDown = false;         // EXIT COOL-DOWN IF ACTIVE
 
   server.send(200, "text/plain", "Stopped");
 }
@@ -566,6 +584,16 @@ void handleStatus() {
       }
   }
 
+	// Cool-down status
+	doc["coolDownActive"] = inCoolDown;
+	if (inCoolDown) {
+		SettingsEE &s = storage.settings();
+		unsigned long coolDownElapsed = (millis() - coolDownStart) / 1000;
+		long remaining = s.coolDownSec - coolDownElapsed;
+		if (remaining < 0) remaining = 0;
+		doc["coolDownRemaining"] = remaining;
+	}
+
   String out;
   serializeJson(doc, out);
   server.send(200, "application/json", out);
@@ -579,6 +607,14 @@ void setup() {
   Serial.begin(115200);
   Serial.println("\nBooting...");
 
+  heaterOn = false;
+  
+  // Initialize mixer to manual mode, off (safe default on startup)
+  mixerManualMode = true;    // ← Manual mode (not auto)
+  mixerOn = false;           // ← Off
+  mixerPhaseStart = millis();
+  
+  
   if (!LittleFS.begin()) {
     Serial.println("LittleFS mount failed");
   }
@@ -623,6 +659,23 @@ void setup() {
 void loop() {
   server.handleClient();
 
+  // COOL-DOWN COUNTDOWN: Check frequently, independent of READ_INTERVAL
+  // This ensures responsive STOP button and precise timing
+  if (inCoolDown) {
+    SettingsEE &s = storage.settings();
+    unsigned long coolDownElapsed = (millis() - coolDownStart) / 1000;
+    
+    if (coolDownElapsed >= s.coolDownSec) {
+      // Cool-down finished
+      inCoolDown = false;
+      isRunning = false;
+      mixerManualMode = true;   // Back to manual mode
+      mixerOn = false;          // Stop mixer
+      Serial.println("Cool-down complete");
+    }
+  }
+
+  // TEMPERATURE & MASH TIMING: Only runs every READ_INTERVAL_MS
   if (millis() - lastRead > READ_INTERVAL_MS) {
     lastRead = millis();
 
