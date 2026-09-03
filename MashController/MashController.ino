@@ -4,6 +4,15 @@
 #include <ArduinoJson.h>
 #include "Storage.h"
 
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+#define ONE_WIRE_BUS 4
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+
 ESP8266WebServer server(80);
 
 /* ---- Temperature history ---- */
@@ -614,7 +623,24 @@ void setup() {
   mixerOn = false;           // ← Off
   mixerPhaseStart = millis();
   
+  int count = sensors.getDeviceCount();
+  Serial.printf("Found %d DS18B20 device(s)\n", count);
   
+  Serial.println(oneWire.reset());
+
+while(1) {
+  byte addr[8];
+  oneWire.reset_search();          // <-- critical, resets internal search state
+  if (oneWire.search(addr)) {
+    Serial.print("Found: ");
+    for (int i = 0; i < 8; i++) { Serial.print(addr[i], HEX); Serial.print(" "); }
+    Serial.println();
+  } else {
+    Serial.println("No devices found.");
+  }
+  delay(1000);
+}
+
   if (!LittleFS.begin()) {
     Serial.println("LittleFS mount failed");
   }
@@ -678,6 +704,16 @@ void loop() {
   // TEMPERATURE & MASH TIMING: Only runs every READ_INTERVAL_MS
   if (millis() - lastRead > READ_INTERVAL_MS) {
     lastRead = millis();
+
+
+  sensors.requestTemperatures();
+  float tempC = sensors.getTempCByIndex(0);
+
+  if (tempC == DEVICE_DISCONNECTED_C) {
+    Serial.println("Error: sensor disconnected");
+  } else {
+    Serial.printf("Temp: %.2f C\n", tempC);
+  }
 
     float t = readTemperature();
     addTemp(t);
