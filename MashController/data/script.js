@@ -111,40 +111,45 @@ function formatTime(sec) {
 
 function updateProcessUI(st) {
   const badge = document.getElementById('stateBadge');
-  const paused = !!st.paused;
+  const isPaused = st.paused ?? false;             
+  const isRunning = st.running ?? false;           
+  const inCoolDown = st.coolDownActive ?? false;   
 
-  badge.classList.remove('running', 'paused');
-  if (st.running && paused) {
-    badge.textContent = 'Paused';
-    badge.classList.add('paused');
-  } else if (st.running) {
-    badge.textContent = 'Running';
-    badge.classList.add('running');
-  } else {
-    badge.textContent = 'Stopped';
-  }
+	badge.classList.remove('running', 'paused', 'cooldown');
+	if (inCoolDown) {
+		badge.textContent = 'Cooling Down';
+		badge.classList.add('cooldown');
+	} else if (isRunning && isPaused) {
+		badge.textContent = 'Paused';
+		badge.classList.add('paused');
+	} else if (isRunning) {
+		badge.textContent = 'Running';
+		badge.classList.add('running');
+	} else {
+		badge.textContent = 'Stopped';
+	}
 
-  const timerEl = document.getElementById('remainingTime');
-  timerEl.textContent = formatTime(st.remaining);
-  timerEl.classList.toggle('inactive', !st.running);
+	const timerEl = document.getElementById('remainingTime');
+	timerEl.textContent = formatTime(inCoolDown ? (st.coolDownRemaining ?? 0) : (st.remaining ?? 0));
+	timerEl.classList.toggle('inactive', !isRunning && !inCoolDown);
   
-  document.getElementById('btnStart').classList.toggle('hidden', st.running);
-  document.getElementById('btnPause').classList.toggle('hidden', !st.running || paused);
-  document.getElementById('btnResume').classList.toggle('hidden', !st.running || !paused);
-  document.getElementById('btnSkip').classList.toggle('hidden', !st.running);
-  document.getElementById('btnStop').classList.toggle('hidden', !st.running);
+	document.getElementById('btnStart').classList.toggle('hidden', isRunning || inCoolDown);
+	document.getElementById('btnPause').classList.toggle('hidden', !isRunning || isPaused || inCoolDown);
+	document.getElementById('btnResume').classList.toggle('hidden', !isRunning || !isPaused || inCoolDown);
+	document.getElementById('btnSkip').classList.toggle('hidden', !isRunning || inCoolDown);
+	document.getElementById('btnStop').classList.toggle('hidden', !isRunning && !inCoolDown);
   
-  document.querySelector('.profile-picker').classList.toggle('disabled', st.running);
+    document.querySelector('.profile-picker').classList.toggle('disabled', isRunning || inCoolDown);
 
 	const editor = document.getElementById('profilesEditor');
 	const lockMsg = document.getElementById('profilesLocked');
 
 	if (editor) {
-		editor.classList.toggle('editor-disabled', st.running);
+		editor.classList.toggle('editor-disabled', isRunning || inCoolDown);
 	}
 
 	if (lockMsg) {
-		lockMsg.classList.toggle('hidden', !st.running);
+		lockMsg.classList.toggle('hidden', !(isRunning || inCoolDown));
 	}
 
 	const heater = document.getElementById('heaterBadge');
@@ -183,7 +188,7 @@ function renderMixerStatus(st) {
 	if (mixerMode === 'manual') {
 		badge.textContent = st.mixerOn ? 'ON' : 'OFF';
 	} else {
-		badge.textContent = Number(st.mixerRemaining || 0) + 's';
+		badge.textContent = Number(st.mixerRemaining || 0);
 	}
 }
 
@@ -708,14 +713,17 @@ async function loadSettings() {
             settings.heaterHysteresis ?? 0.5;
 
         document.getElementById('setMixerOnSec').value =
-            settings.mixerOnSec ?? 10;
+            settings.mixerOnSec ?? 5;
 
         document.getElementById('setMixerRestSec').value =
-            settings.mixerRestSec ?? 50;
+            settings.mixerRestSec ?? 15;
 
         document.getElementById('setWifiSsid').value =
             settings.wifiSSID ?? '';
 
+		document.getElementById('setCoolDownSec').value =
+			settings.coolDownSec ?? 180;
+	
     } catch (e) {
         console.error('Settings load error', e);
         showToast('Failed to load settings', 'error');
@@ -737,6 +745,10 @@ async function saveSettings() {
             mixerRestSec: parseInt(
                 document.getElementById('setMixerRestSec').value
             ),
+
+			coolDownSec: parseInt(
+				document.getElementById('setCoolDownSec').value
+			),
 
             wifiSSID: document.getElementById('setWifiSsid').value,
 

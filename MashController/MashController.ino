@@ -684,7 +684,7 @@ void loop() {
 
     updateMixer();
 
-    if (isRunning && !isPaused) {
+    if (isRunning && !isPaused && !inCoolDown) {
       float currentTemp = t;
 
       // If waiting for temperature → check if we reached it
