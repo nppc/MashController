@@ -32,6 +32,7 @@ void Storage::loadDefaults() {
   _data.settings.heaterHysteresis = 0.5f;
   _data.settings.mixerRestSec   = 15;
   _data.settings.mixerOnSec     = 5;
+  _data.settings.coolDownSec    = 180;   // 3 minutes default
 
   _data.profileCount = 0;
 
