@@ -240,6 +240,48 @@
 	</div>
 
 	  <div class="stat-card">
+		<div class="label">Temperature Sensor</div>
+
+		<div class="settings-group">
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Sensor Address</div>
+			  <div class="setting-desc">
+				DS18B20 1-Wire ROM address (read-only).
+			  </div>
+			</div>
+			<div class="sensor-readout" id="sensorAddress">--</div>
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Last Reading</div>
+			  <div class="setting-desc">
+				Temperature at the time the address was last confirmed.
+			  </div>
+			</div>
+			<div class="sensor-readout" id="sensorTempAtRead">-- °C</div>
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Status</div>
+			  <div class="setting-desc">
+				Sensor connection state.
+			  </div>
+			</div>
+			<span class="heater-badge off" id="sensorStatusBadge">--</span>
+		  </div>
+
+		  <button class="btn" id="btnRediscoverSensor" onclick="rediscoverSensor()">
+			Rediscover Sensor
+		  </button>
+
+		</div>
+	  </div>
+
+	  <div class="stat-card">
 		<div class="label">Network</div>
 
 		<div class="settings-group">

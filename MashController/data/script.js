@@ -250,6 +250,10 @@ function openScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   closeSideMenu();
+
+  if (id === 'settings') {
+    loadSettings();   // re-read from the device each time the screen opens
+  }
 }
 
 /* YOUR ORIGINAL CHART CODE */
@@ -723,10 +727,76 @@ async function loadSettings() {
 
 		document.getElementById('setCoolDownSec').value =
 			settings.coolDownSec ?? 180;
-	
+
+		renderSensorInfo(settings);
+
     } catch (e) {
         console.error('Settings load error', e);
         showToast('Failed to load settings', 'error');
+    }
+}
+
+/* DS18B20 sensor info (read-only) */
+function renderSensorInfo(s) {
+    const addrEl = document.getElementById('sensorAddress');
+    const tempEl = document.getElementById('sensorTempAtRead');
+    const statusEl = document.getElementById('sensorStatusBadge');
+
+    if (!addrEl || !tempEl || !statusEl) return;
+
+    addrEl.textContent = s.sensorFound ? s.sensorAddress : 'Not found';
+    tempEl.textContent = s.sensorFound
+        ? `${Number(s.sensorTempAtRead).toFixed(1)} °C`
+        : '-- °C';
+
+    if (s.sensorDebugFake) {
+        statusEl.textContent = 'DEBUG';
+        statusEl.classList.remove('status-error');
+        statusEl.classList.add('status-ok');
+    } else if (s.sensorFound && s.sensorOk) {
+        statusEl.textContent = 'OK';
+        statusEl.classList.remove('status-error');
+        statusEl.classList.add('status-ok');
+    } else {
+        statusEl.textContent = s.sensorFound ? 'Error' : 'Not Found';
+        statusEl.classList.remove('status-ok');
+        statusEl.classList.add('status-error');
+    }
+}
+
+async function rediscoverSensor() {
+    const btn = document.getElementById('btnRediscoverSensor');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Searching...';
+    }
+
+    try {
+        const res = await fetch('rediscoverSensor', { method: 'POST' });
+
+        if (res.status === 409) {
+            showToast('Sensor read in progress, try again shortly', 'error');
+            return;
+        }
+
+        const data = await res.json();
+
+        if (data.sensorFound) {
+            showToast(`Sensor found: ${data.sensorAddress}`);
+        } else {
+            showToast('No sensor found', 'error');
+        }
+
+        await loadSettings();
+
+    } catch (e) {
+        console.error(e);
+        showToast('Rediscover failed', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Rediscover Sensor';
+        }
     }
 }
 

@@ -7,11 +7,23 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define ONE_WIRE_BUS 4
+// Uncomment to use the simulated temperature model instead of a real
+// DS18B20 sensor - handy for testing mash logic/UI without hardware.
+// #define DEBUG_FAKE_TEMP
+
+#define ONE_WIRE_BUS D2
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
+DeviceAddress sensorAddr;
+bool sensorFound = false;
+
+bool conversionInProgress = false;
+unsigned long conversionStartTime = 0;
+const unsigned long CONVERSION_TIME_MS = 750; // 12-bit resolution conversion time
+float lastGoodTemp = 20.0f;
+bool sensorOk = true;
 
 ESP8266WebServer server(80);
 
@@ -242,7 +254,7 @@ void handleSaveProfiles() {
 
 void handleGetSettings() {
   SettingsEE &s = storage.settings();
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
 
   doc["wifiSSID"] = s.wifiSSID;
   // Password is never echoed back - only whether one is currently set.
@@ -251,6 +263,17 @@ void handleGetSettings() {
   doc["mixerOnSec"] = s.mixerOnSec;
   doc["mixerRestSec"] = s.mixerRestSec;
   doc["coolDownSec"] = s.coolDownSec;
+
+  // Read-only DS18B20 info
+  doc["sensorAddress"] = sensorAddressToString();
+  doc["sensorFound"] = sensorFound;
+  doc["sensorTempAtRead"] = lastGoodTemp;
+  doc["sensorOk"] = sensorOk;
+#ifdef DEBUG_FAKE_TEMP
+  doc["sensorDebugFake"] = true;
+#else
+  doc["sensorDebugFake"] = false;
+#endif
 
   String out;
   serializeJson(doc, out);
@@ -305,11 +328,36 @@ void handleSaveSettings() {
   server.send(200, "text/plain", "Saved (WiFi changes apply after reboot)");
 }
 
+void handleRediscoverSensor() {
+#ifdef DEBUG_FAKE_TEMP
+  server.send(200, "application/json", "{\"sensorFound\":true,\"sensorAddress\":\"DEBUG-FAKE\"}");
+  return;
+#else
+  // Don't rediscover mid-conversion - wait for the current read cycle to finish
+  if (conversionInProgress) {
+    server.send(409, "text/plain", "Sensor read in progress, try again shortly");
+    return;
+  }
+
+  sensorFound = discoverSensorAddress();
+
+  if (sensorFound) {
+    sensors.setResolution(sensorAddr, 12);
+    server.send(200, "application/json",
+      "{\"sensorFound\":true,\"sensorAddress\":\"" + sensorAddressToString() + "\"}");
+  } else {
+    server.send(200, "application/json", "{\"sensorFound\":false}");
+  }
+#endif
+}
+
 /* -------------------------------------------------------------------------- */
 /*                           TEMPERATURE SIMULATION                           */
+/*        (kept for debugging - only compiled in when DEBUG_FAKE_TEMP is on)  */
 /* -------------------------------------------------------------------------- */
 
-float readTemperature(void)
+#ifdef DEBUG_FAKE_TEMP
+float fakeReadTemperature(void)
 {
     float last = (histIndex > 0)
                  ? tempHistory[(histIndex - 1) % HISTORY_SIZE]
@@ -388,7 +436,121 @@ float readTemperature(void)
 
     return waterTemp;
 }
+#endif // DEBUG_FAKE_TEMP
 
+/* -------------------------------------------------------------------------- */
+/*                        DS18B20 DISCOVERY & NON-BLOCKING READ               */
+/* -------------------------------------------------------------------------- */
+
+// Scans the OneWire bus for a DS18B20 (family code 0x28), validates its
+// address CRC, and stores it in sensorAddr. Used at boot and on-demand via
+// /rediscoverSensor. Uses OneWire::search() directly rather than
+// DallasTemperature's own enumeration, which has proven less reliable here.
+bool discoverSensorAddress() {
+  oneWire.reset_search();
+  if (!oneWire.search(sensorAddr)) {
+    Serial.println("No DS18B20 found on bus");
+    return false;
+  }
+
+  if (OneWire::crc8(sensorAddr, 7) != sensorAddr[7]) {
+    Serial.println("DS18B20 address CRC mismatch");
+    return false;
+  }
+
+  if (sensorAddr[0] != 0x28) {
+    Serial.println("Device found is not a DS18B20 (wrong family code)");
+    return false;
+  }
+
+  Serial.print("DS18B20 found at address: ");
+  for (int i = 0; i < 8; i++) {
+    if (sensorAddr[i] < 16) Serial.print("0");
+    Serial.print(sensorAddr[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+
+  return true;
+}
+
+// Formats sensorAddr as a colon-separated hex string for the settings API.
+String sensorAddressToString() {
+  if (!sensorFound) return "none";
+
+  String out = "";
+  for (int i = 0; i < 8; i++) {
+    if (sensorAddr[i] < 16) out += "0";
+    out += String(sensorAddr[i], HEX);
+    if (i < 7) out += ":";
+  }
+  out.toUpperCase();
+  return out;
+}
+
+// Drives temperature acquisition without blocking the HTTP server.
+// - Real sensor: kicks off a conversion, then reads it back once
+//   CONVERSION_TIME_MS has elapsed - call this every loop() iteration.
+//   Paced to roughly once per READ_INTERVAL_MS so OneWire bit-banging
+//   (which briefly disables interrupts) doesn't run back-to-back and
+//   starve the WiFi/HTTP stack.
+// - DEBUG_FAKE_TEMP: recomputes the simulated model - call this once per
+//   READ_INTERVAL_MS, same cadence as the original code.
+unsigned long nextConversionAllowedAt = 0;
+
+void updateTemperatureNonBlocking() {
+#ifdef DEBUG_FAKE_TEMP
+  float t = fakeReadTemperature();
+  sensorFound = true;
+  sensorOk = true;
+  lastGoodTemp = t;
+  addTemp(t);
+#else
+  if (!sensorFound) return;
+
+  unsigned long now = millis();
+
+  if (!conversionInProgress) {
+    if (now < nextConversionAllowedAt) return;   // resting between cycles - don't hammer the bus
+
+    sensors.requestTemperatures();      // returns immediately, doesn't block
+    conversionStartTime = now;
+    conversionInProgress = true;
+    return;
+  }
+
+  if (now - conversionStartTime >= CONVERSION_TIME_MS) {
+    float t = sensors.getTempC(sensorAddr);
+
+    if (t == DEVICE_DISCONNECTED_C) {
+      sensorOk = false;
+      Serial.println("DS18B20 read error");
+      // keep lastGoodTemp as-is; don't feed a garbage value to updateHeater()
+    } else {
+      sensorOk = true;
+      lastGoodTemp = t;
+      updateHeater(lastGoodTemp);
+      addTemp(lastGoodTemp);
+    }
+
+    conversionInProgress = false;   // next call starts a fresh conversion
+
+    // Rest until the remainder of READ_INTERVAL_MS has elapsed before
+    // starting the next conversion, rather than firing immediately again.
+    if (READ_INTERVAL_MS > CONVERSION_TIME_MS) {
+      nextConversionAllowedAt = now + (READ_INTERVAL_MS - CONVERSION_TIME_MS);
+    } else {
+      nextConversionAllowedAt = now;
+    }
+  }
+#endif
+}
+
+// Cheap getter - safe to call anytime (e.g. from handleStatus()); never blocks.
+float readTemperature(void)
+{
+    return lastGoodTemp;
+}
 
 void addTemp(float t) {
   tempHistory[histIndex % HISTORY_SIZE] = t;
@@ -622,24 +784,22 @@ void setup() {
   mixerManualMode = true;    // ← Manual mode (not auto)
   mixerOn = false;           // ← Off
   mixerPhaseStart = millis();
-  
-  int count = sensors.getDeviceCount();
-  Serial.printf("Found %d DS18B20 device(s)\n", count);
-  
-  Serial.println(oneWire.reset());
 
-while(1) {
-  byte addr[8];
-  oneWire.reset_search();          // <-- critical, resets internal search state
-  if (oneWire.search(addr)) {
-    Serial.print("Found: ");
-    for (int i = 0; i < 8; i++) { Serial.print(addr[i], HEX); Serial.print(" "); }
-    Serial.println();
+#ifdef DEBUG_FAKE_TEMP
+  Serial.println("DEBUG_FAKE_TEMP active - using simulated temperature, no DS18B20 required");
+  sensorFound = true;
+  sensorOk = true;
+#else
+  sensors.begin();
+  sensors.setWaitForConversion(false);   // non-blocking conversions
+
+  sensorFound = discoverSensorAddress();
+  if (sensorFound) {
+    sensors.setResolution(sensorAddr, 12);
   } else {
-    Serial.println("No devices found.");
+    Serial.println("WARNING: proceeding without a temperature sensor");
   }
-  delay(1000);
-}
+#endif
 
   if (!LittleFS.begin()) {
     Serial.println("LittleFS mount failed");
@@ -663,6 +823,7 @@ while(1) {
 
   server.on("/settings", HTTP_GET, handleGetSettings);
   server.on("/saveSettings", HTTP_POST, handleSaveSettings);
+  server.on("/rediscoverSensor", HTTP_POST, handleRediscoverSensor);
 
   server.on("/data", handleData);
   server.on("/startProfile", HTTP_POST, handleStartProfile);
@@ -685,6 +846,12 @@ while(1) {
 void loop() {
   server.handleClient();
 
+#ifndef DEBUG_FAKE_TEMP
+  // Real sensor: async conversion state machine, never blocks the web server.
+  // Paces itself against CONVERSION_TIME_MS internally, so call every iteration.
+  updateTemperatureNonBlocking();
+#endif
+
   // COOL-DOWN COUNTDOWN: Check frequently, independent of READ_INTERVAL
   // This ensures responsive STOP button and precise timing
   if (inCoolDown) {
@@ -701,27 +868,20 @@ void loop() {
     }
   }
 
-  // TEMPERATURE & MASH TIMING: Only runs every READ_INTERVAL_MS
+  // MASH TIMING: Only runs every READ_INTERVAL_MS
   if (millis() - lastRead > READ_INTERVAL_MS) {
     lastRead = millis();
 
-
-  sensors.requestTemperatures();
-  float tempC = sensors.getTempCByIndex(0);
-
-  if (tempC == DEVICE_DISCONNECTED_C) {
-    Serial.println("Error: sensor disconnected");
-  } else {
-    Serial.printf("Temp: %.2f C\n", tempC);
-  }
-
-    float t = readTemperature();
-    addTemp(t);
+#ifdef DEBUG_FAKE_TEMP
+    // Fake sensor: recompute the simulated model on this same cadence,
+    // same as the original blocking code did.
+    updateTemperatureNonBlocking();
+#endif
 
     updateMixer();
 
     if (isRunning && !isPaused && !inCoolDown) {
-      float currentTemp = t;
+      float currentTemp = lastGoodTemp;   // cached value - never blocks
 
       // If waiting for temperature → check if we reached it
       if (waitingForTemp) {
