@@ -28,7 +28,6 @@ void Storage::loadDefaults() {
   _data.version = STORAGE_VERSION;
 
   strncpy(_data.settings.wifiSSID, "MashController", STORAGE_SSID_LEN - 1);
-  strncpy(_data.settings.wifiPass, "12345678", STORAGE_PASS_LEN - 1);
   _data.settings.heaterHysteresis = 0.5f;
   _data.settings.mixerRestSec   = 15;
   _data.settings.mixerOnSec     = 5;
