@@ -12,6 +12,7 @@
 #include "Outputs.h"
 #include "MashProfile.h"
 #include "WebHandlers.h"
+#include "DoubleReset.h"
 
 /* ---- Timing ---- */
 unsigned long lastRead = 0;
@@ -23,6 +24,8 @@ unsigned long lastRead = 0;
 void setup() {
   Serial.begin(115200);
   Serial.println("\nBooting...");
+
+  const bool doubleReset = detectDoubleReset();
 
   // Set output pins to their OFF states as early as possible.
   outputsInit();
@@ -40,8 +43,17 @@ void setup() {
   // or if the stored data fails its CRC check.
   storage.begin();
 
+  if (doubleReset) {
+    Serial.println("Double reset detected: using default AP credentials");
+    resetApCredentialsToDefaults();
+  }
+
   SettingsEE &s = storage.settings();
-  WiFi.softAP(s.wifiSSID, s.wifiPass);
+  if (strlen(s.wifiPass) == 0) {
+    WiFi.softAP(s.wifiSSID);
+  } else {
+    WiFi.softAP(s.wifiSSID, s.wifiPass);
+  }
 
   webHandlersInit();
   server.begin();
