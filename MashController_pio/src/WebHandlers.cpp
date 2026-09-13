@@ -2,6 +2,8 @@
 
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
+#include <Updater.h>
 
 #include "Storage.h"
 #include "Sensor.h"
@@ -10,6 +12,26 @@
 #include "MashProfile.h"
 
 ESP8266WebServer server(80);
+bool otaEnabled = false;
+
+namespace {
+bool otaStarted = false;
+unsigned long otaActivatedAt = 0;
+constexpr unsigned long OTA_TIMEOUT_MS = 5UL * 60UL * 1000UL;
+bool updateFailed = false;
+bool updateReceived = false;
+
+bool isFilesystemImage(const String &filename) {
+  String lowerName = filename;
+  lowerName.toLowerCase();
+  return lowerName.indexOf("littlefs") >= 0 || lowerName.indexOf("filesystem") >= 0;
+}
+
+size_t filesystemSize() {
+  FSInfo info;
+  return LittleFS.info(info) ? info.totalBytes : 0;
+}
+}
 
 /* -------------------------------------------------------------------------- */
 /*                               FILE HANDLING                                */
@@ -25,6 +47,10 @@ static void handleFileRead(String path) {
 
   if (LittleFS.exists(path)) {
     File file = LittleFS.open(path, "r");
+    if (path == "/ota.html") {
+      server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      server.sendHeader("Pragma", "no-cache");
+    }
     server.streamFile(file, contentType);
     file.close();
     return;
@@ -352,6 +378,71 @@ static void handleMixerToggle() {
   server.send(200, "text/plain", mixerOn ? "On" : "Off");
 }
 
+static void handleEnableOta() {
+  if (!otaStarted) {
+    ArduinoOTA.begin();
+    otaStarted = true;
+  }
+
+  otaActivatedAt = millis();
+  otaEnabled = true;
+  handleFileRead("/ota.html");
+}
+
+static void handleUpdateUpload() {
+  if (!otaEnabled) return;
+
+  HTTPUpload &upload = server.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    updateFailed = false;
+    updateReceived = false;
+
+    const bool filesystem = server.arg("type") == "filesystem" ||
+                isFilesystemImage(upload.filename);
+    const int command = filesystem ? U_FS : U_FLASH;
+    const size_t maxUpdateSize = filesystem
+                                   ? filesystemSize()
+                     : (ESP.getFreeSketchSpace() - 0x1000);
+
+    Serial.printf("OTA upload started: %s (%s)\n",
+                  upload.filename.c_str(), filesystem ? "LittleFS" : "firmware");
+
+    if (!Update.begin(maxUpdateSize, command)) {
+      Update.printError(Serial);
+      updateFailed = true;
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!updateFailed && Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      Update.printError(Serial);
+      updateFailed = true;
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (!updateFailed && !Update.end(true)) {
+      Update.printError(Serial);
+      updateFailed = true;
+    }
+    updateReceived = true;
+    Serial.printf("OTA upload finished: %u bytes\n", upload.totalSize);
+  }
+}
+
+static void handleUpdateResult() {
+  if (!otaEnabled) {
+    server.send(403, "text/plain", "OTA is not enabled");
+    return;
+  }
+
+  if (!updateReceived || updateFailed || Update.hasError()) {
+    server.send(500, "text/plain", "Update failed");
+    return;
+  }
+
+  server.send(200, "text/plain", "Update successful. Restarting...");
+  delay(100);
+  ESP.restart();
+}
+
 static void handleStatus() {
   StaticJsonDocument<256> doc;
 
@@ -416,6 +507,9 @@ void webHandlersInit() {
   server.on("/style.css", []() { handleFileRead("/style.css"); });
   server.on("/script.js", []() { handleFileRead("/script.js"); });
   server.on("/chart.js", []() { handleFileRead("/chart.js"); });
+  server.on("/ota.html", []() { handleFileRead("/ota.html"); });
+  server.on("/enable-ota", HTTP_GET, handleEnableOta);
+  server.on("/update", HTTP_POST, handleUpdateResult, handleUpdateUpload);
 
   server.on("/profiles_data.json", HTTP_GET, handleGetProfiles);
   server.on("/saveProfiles", HTTP_POST, handleSaveProfiles);
@@ -433,4 +527,16 @@ void webHandlersInit() {
   server.on("/mixerMode", HTTP_POST, handleMixerMode);
   server.on("/mixerToggle", HTTP_POST, handleMixerToggle);
   server.on("/status", handleStatus);
+}
+
+void otaUpdate() {
+  if (!otaEnabled) return;
+
+  if (millis() - otaActivatedAt >= OTA_TIMEOUT_MS) {
+    otaEnabled = false;
+    Serial.println("OTA window expired");
+    return;
+  }
+
+  ArduinoOTA.handle();
 }

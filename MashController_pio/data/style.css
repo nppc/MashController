@@ -54,10 +54,101 @@
       font-size: 16px;
       cursor: pointer;
       color: var(--text);
+      text-decoration: none;
+      display: block;
     }
 
     .menu-item:hover {
       color: var(--accent2);
+    }
+
+    .back-link {
+      color: var(--text);
+      font-size: 30px;
+      line-height: 1;
+      text-decoration: none;
+    }
+
+    .ota-card {
+      margin-top: 12px;
+    }
+
+    .ota-status {
+      color: var(--accent2);
+      font-size: 24px;
+      font-weight: 700;
+      margin: 12px 0;
+    }
+
+    .ota-countdown {
+      color: var(--accent);
+      font-size: 42px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      margin: 24px 0;
+    }
+
+    .ota-form {
+      border-top: 1px solid var(--border);
+      margin-top: 18px;
+      padding-top: 18px;
+    }
+
+    .ota-form .btn {
+      width: 100%;
+    }
+
+    .ota-progress-panel {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin: 18px 0;
+      padding: 14px;
+    }
+
+    .ota-progress-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .ota-progress-heading span:last-child {
+      color: var(--accent2);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+
+    .ota-progress-track {
+      background: var(--border);
+      border-radius: 999px;
+      height: 12px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .ota-progress-fill {
+      background: var(--accent2);
+      height: 100%;
+      transition: width 0.15s ease;
+      width: 0;
+    }
+
+    .ota-progress-fill.active {
+      animation: ota-progress-pulse 1s linear infinite;
+      background: linear-gradient(90deg, var(--accent2), #b6f2c9, var(--accent2));
+      background-size: 200% 100%;
+    }
+
+    @keyframes ota-progress-pulse {
+      from { background-position: 100% 0; }
+      to { background-position: -100% 0; }
+    }
+
+    .ota-progress-detail {
+      color: var(--text-dim);
+      font-size: 12px;
+      margin-top: 8px;
+      overflow-wrap: anywhere;
     }
 
 	#sideMenuBackdrop {

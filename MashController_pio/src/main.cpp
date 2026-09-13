@@ -66,6 +66,7 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  otaUpdate();
 
   // Keep the physical outputs in sync with heaterOn/mixerOn every pass,
   // regardless of which code path last changed them.

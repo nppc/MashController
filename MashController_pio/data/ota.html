@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>Firmware Update | Mash Controller</title>
+  <link rel="stylesheet" href="style.css?v=ota-progress-2">
+</head>
+<body>
+  <div id="app">
+    <div class="header">
+      <a class="back-link" href="/">‹</a>
+      <h1>Firmware Update</h1>
+      <span class="status-dot"></span>
+    </div>
+
+    <main class="screen active">
+      <section class="stat-card ota-card">
+        <div class="label">OTA Window</div>
+        <div class="ota-status">Update window active</div>
+        <p class="setting-desc">
+          Select a PlatformIO firmware or LittleFS image below. The controller will restart automatically after a successful upload.
+        </p>
+        <div class="ota-countdown" id="otaCountdown">05:00</div>
+
+        <div class="ota-progress-panel" id="otaProgressPanel" hidden>
+          <div class="ota-progress-heading">
+            <span id="otaProgressStatus">Preparing upload...</span>
+            <span id="otaProgressPercent">0%</span>
+          </div>
+          <div class="ota-progress-track">
+            <div class="ota-progress-fill" id="otaProgressFill"></div>
+          </div>
+          <div class="ota-progress-detail" id="otaProgressDetail"></div>
+        </div>
+
+        <form class="ota-form" action="/update" method="post" enctype="multipart/form-data" data-update-form>
+          <div class="label-small">Firmware image</div>
+          <input class="input-dark" type="file" name="update" accept=".bin" required>
+          <input type="hidden" name="type" value="firmware">
+          <button class="btn green" type="submit">Upload firmware</button>
+        </form>
+
+        <form class="ota-form" action="/update" method="post" enctype="multipart/form-data" data-update-form>
+          <div class="label-small">LittleFS image</div>
+          <input class="input-dark" type="file" name="update" accept=".bin" required>
+          <input type="hidden" name="type" value="filesystem">
+          <button class="btn green" type="submit">Upload LittleFS</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    let remaining = 300;
+    const countdown = document.getElementById('otaCountdown');
+
+    function renderCountdown() {
+      if (remaining === null) {
+        countdown.textContent = '--:--';
+        return;
+      }
+
+      const minutes = Math.floor(remaining / 60).toString().padStart(2, '0');
+      const seconds = (remaining % 60).toString().padStart(2, '0');
+      countdown.textContent = `${minutes}:${seconds}`;
+    }
+
+    renderCountdown();
+    setInterval(() => {
+      if (remaining !== null && remaining > 0) {
+        remaining -= 1;
+        renderCountdown();
+      }
+    }, 1000);
+
+    const progressPanel = document.getElementById('otaProgressPanel');
+    const progressFill = document.getElementById('otaProgressFill');
+    const progressPercent = document.getElementById('otaProgressPercent');
+    const progressStatus = document.getElementById('otaProgressStatus');
+    const progressDetail = document.getElementById('otaProgressDetail');
+    const updateForms = document.querySelectorAll('[data-update-form]');
+    let uploadInProgress = false;
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    updateForms.forEach((form) => {
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        if (uploadInProgress) return;
+
+        const fileInput = form.querySelector('input[type="file"]');
+        if (!fileInput.files.length) return;
+
+        uploadInProgress = true;
+//        remaining = 300;
+//        renderCountdown();
+        const file = fileInput.files[0];
+        const request = new XMLHttpRequest();
+        const formData = new FormData(form);
+        const buttons = document.querySelectorAll('[data-update-form] button, [data-update-form] input');
+
+        progressPanel.hidden = false;
+        progressFill.style.width = '0%';
+        progressFill.classList.add('active');
+        progressPercent.textContent = '0%';
+        progressStatus.textContent = `Uploading ${file.name}`;
+        progressDetail.textContent = `0 B of ${formatBytes(file.size)}`;
+        buttons.forEach((control) => { control.disabled = true; });
+
+        request.upload.addEventListener('progress', (progressEvent) => {
+          if (!progressEvent.lengthComputable) {
+            progressStatus.textContent = `Uploading ${file.name}`;
+            progressDetail.textContent = `${formatBytes(progressEvent.loaded)} sent`;
+            return;
+          }
+
+          const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+          progressFill.style.width = `${percent}%`;
+          progressPercent.textContent = `${percent}%`;
+          progressDetail.textContent = `${formatBytes(progressEvent.loaded)} of ${formatBytes(progressEvent.total)}`;
+        });
+
+        request.addEventListener('load', () => {
+          if (request.status >= 200 && request.status < 300) {
+            progressFill.style.width = '100%';
+            progressFill.classList.remove('active');
+            progressPercent.textContent = '100%';
+            progressStatus.textContent = 'Upload complete';
+            progressDetail.textContent = 'The controller is restarting. Wait a few seconds before reconnecting.';
+            remaining = null;
+            renderCountdown();
+          } else {
+            progressStatus.textContent = 'Upload failed';
+            progressDetail.textContent = request.responseText || `Device returned HTTP ${request.status}`;
+            progressFill.classList.remove('active');
+            uploadInProgress = false;
+            buttons.forEach((control) => { control.disabled = false; });
+          }
+        });
+
+        request.addEventListener('error', () => {
+          progressStatus.textContent = 'Upload connection lost';
+          progressDetail.textContent = 'The device may be restarting. Wait a few seconds, then check the controller.';
+          progressFill.classList.remove('active');
+          uploadInProgress = false;
+          buttons.forEach((control) => { control.disabled = false; });
+        });
+
+        request.open('POST', form.action);
+        request.send(formData);
+      });
+    });
+  </script>
+</body>
+</html>
