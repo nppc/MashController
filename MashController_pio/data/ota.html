@@ -18,11 +18,13 @@
     <main class="screen active">
       <section class="stat-card ota-card">
         <div class="label">OTA Window</div>
-        <div class="ota-status">Update window active</div>
+        <div class="ota-status-row">
+          <div class="ota-status">Update window active</div>
+          <div class="ota-countdown" id="otaCountdown">05:00</div>
+        </div>
         <p class="setting-desc">
           Select a PlatformIO firmware or LittleFS image below. The controller will restart automatically after a successful upload.
         </p>
-        <div class="ota-countdown" id="otaCountdown">05:00</div>
 
         <div class="ota-progress-panel" id="otaProgressPanel" hidden>
           <div class="ota-progress-heading">

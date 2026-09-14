@@ -73,19 +73,27 @@
       margin-top: 12px;
     }
 
+    .ota-status-row {
+      align-items: baseline;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
     .ota-status {
       color: var(--accent2);
-      font-size: 24px;
+      font-size: 18px;
       font-weight: 700;
       margin: 12px 0;
     }
 
     .ota-countdown {
       color: var(--accent);
-      font-size: 42px;
+      flex-shrink: 0;
+      font-size: 24px;
       font-variant-numeric: tabular-nums;
       font-weight: 700;
-      margin: 24px 0;
+      margin: 0;
     }
 
     .ota-form {
@@ -285,6 +293,21 @@
 	.input-dark:focus {
 	  border-color: var(--accent2);
 	}
+
+  .input-dark::file-selector-button {
+    background: #2a3144;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    margin-right: 10px;
+    padding: 8px 12px;
+  }
+
+  .input-dark::file-selector-button:hover {
+    background: #3a4258;
+  }
 
 	.btn {
 	  background: #2a3144;        /* спокойный тёмный */
