@@ -7,10 +7,10 @@
 // DS18B20 sensor - handy for testing mash logic/UI without hardware.
 // #define DEBUG_FAKE_TEMP
 
-#define ONE_WIRE_BUS D2
+#define ONE_WIRE_BUS D1
 
 // Heater SSR: driven directly, active-high (GPIO HIGH -> SSR on).
-#define HEATER_PIN D1
+#define HEATER_PIN D2
 
 // Mixer motor: GPIO drives a small-signal N-MOSFET which, in turn, pulls
 // down the gate of the high-power IRFZ30 (pulled up externally to the
