@@ -713,8 +713,17 @@ async function loadSettings() {
         const res = await fetch('settings');
         settings = await res.json();
 
-        document.getElementById('setHysteresis').value =
-            settings.heaterHysteresis ?? 0.5;
+        document.getElementById('setHeaterOffPredictionSec').value =
+          settings.heaterOffPredictionSec ?? 240;
+
+        document.getElementById('setHeaterOnPredictionSec').value =
+          settings.heaterOnPredictionSec ?? 60;
+
+        document.getElementById('setHeaterDeadband').value =
+          (settings.heaterDeadband ?? 0.1).toFixed(1);
+
+        document.getElementById('setHeaterMinSwitchSec').value =
+          settings.heaterMinSwitchSec ?? 10;
 
         document.getElementById('setMixerOnSec').value =
             settings.mixerOnSec ?? 5;
@@ -804,8 +813,20 @@ async function saveSettings() {
     try {
 
         const payload = {
-            heaterHysteresis: parseFloat(
-                document.getElementById('setHysteresis').value
+            heaterOffPredictionSec: parseInt(
+              document.getElementById('setHeaterOffPredictionSec').value
+            ),
+
+            heaterOnPredictionSec: parseInt(
+              document.getElementById('setHeaterOnPredictionSec').value
+            ),
+
+            heaterDeadband: parseFloat(
+              document.getElementById('setHeaterDeadband').value
+            ),
+
+            heaterMinSwitchSec: parseInt(
+              document.getElementById('setHeaterMinSwitchSec').value
             ),
 
             mixerOnSec: parseInt(

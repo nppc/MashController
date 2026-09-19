@@ -155,7 +155,10 @@ static void handleGetSettings() {
   doc["wifiSSID"] = s.wifiSSID;
   // Password is never echoed back - only whether one is currently set.
   doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
-  doc["heaterHysteresis"] = s.heaterHysteresis;
+  doc["heaterOffPredictionSec"] = s.heaterOffPredictionSec;
+  doc["heaterOnPredictionSec"] = s.heaterOnPredictionSec;
+  doc["heaterDeadband"] = s.heaterDeadband;
+  doc["heaterMinSwitchSec"] = s.heaterMinSwitchSec;
   doc["mixerOnSec"] = s.mixerOnSec;
   doc["mixerRestSec"] = s.mixerRestSec;
   doc["coolDownSec"] = s.coolDownSec;
@@ -200,8 +203,17 @@ static void handleSaveSettings() {
   if (doc.containsKey("wifiPass") && strlen(doc["wifiPass"] | "") > 0) {
     strncpy(s.wifiPass, doc["wifiPass"], STORAGE_PASS_LEN - 1);
   }
-  if (doc.containsKey("heaterHysteresis")) {
-    s.heaterHysteresis = doc["heaterHysteresis"].as<float>();
+  if (doc.containsKey("heaterOffPredictionSec")) {
+    s.heaterOffPredictionSec = doc["heaterOffPredictionSec"].as<float>();
+  }
+  if (doc.containsKey("heaterOnPredictionSec")) {
+    s.heaterOnPredictionSec = doc["heaterOnPredictionSec"].as<float>();
+  }
+  if (doc.containsKey("heaterDeadband")) {
+    s.heaterDeadband = doc["heaterDeadband"].as<float>();
+  }
+  if (doc.containsKey("heaterMinSwitchSec")) {
+    s.heaterMinSwitchSec = doc["heaterMinSwitchSec"].as<uint16_t>();
   }
   if (doc.containsKey("mixerOnSec")) {
     s.mixerOnSec = doc["mixerOnSec"].as<uint8_t>();

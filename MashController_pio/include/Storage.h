@@ -15,7 +15,7 @@
 #define STORAGE_PASS_LEN     24
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      4             // bump if the struct layout changes (bumped for coolDownSec)
+#define STORAGE_VERSION      9             // bump if the struct layout changes
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
@@ -35,7 +35,10 @@ struct ProfileEE {
 struct SettingsEE {
   char     wifiSSID[STORAGE_SSID_LEN];
   char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterHysteresis;     // degrees C either side of target
+  uint16_t heaterOffPredictionSec; // seconds ahead before switching off
+  uint16_t heaterOnPredictionSec;  // seconds ahead before switching on
+  float    heaterDeadband;       // degrees C below target before switching on
+  uint16_t heaterMinSwitchSec;   // minimum time between heater switches
   uint8_t  mixerRestSec;         // length of the rest period
   uint8_t  mixerOnSec;           // seconds of mixerDurationSec the motor runs
   uint16_t coolDownSec;          // seconds mixer runs after profile completes

@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Heater.h"
 #include "Mixer.h"
+#include "MashProfile.h"
 
 namespace {
 constexpr uint32_t MIXER_PWM_FREQUENCY_HZ = 500;
@@ -28,7 +29,8 @@ void outputsInit() {
 // iteration rather than at every place that sets those booleans, so the
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
-  digitalWrite(HEATER_PIN, heaterOn ? HIGH : LOW);
+  digitalWrite(HEATER_PIN,
+               heaterOn && isRunning && !isPaused && !inCoolDown ? HIGH : LOW);
 
   if (!mixerOn) {
     analogWrite(MIXER_PIN, MIXER_PWM_RANGE);

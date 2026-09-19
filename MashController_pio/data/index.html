@@ -158,19 +158,69 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Heater Hysteresis</div>
+			  <div class="setting-title">Switch-Off Prediction Horizon</div>
 			  <div class="setting-desc">
-				Temperature band before heater switches.
+				Default 240 s. Increase if temperature overshoots target; decrease if heating stops too early.
 			  </div>
 			</div>
 
 			<input
-			  id="setHysteresis"
+			  id="setHeaterOffPredictionSec"
+			  class="input-small"
+			  type="number"
+			  step="1"
+			  min="1"
+			  max="600">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Switch-On Prediction Horizon</div>
+			  <div class="setting-desc">
+				Default 60 s. Increase if temperature falls too far; decrease if heating resumes too early.
+			  </div>
+			</div>
+
+			<input
+			  id="setHeaterOnPredictionSec"
+			  class="input-small"
+			  type="number"
+			  step="1"
+			  min="1"
+			  max="300">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Temperature Deadband</div>
+			  <div class="setting-desc">
+				Default 0.1 °C. Increase if switching is frequent; decrease for tighter temperature control.
+			  </div>
+			</div>
+
+			<input
+			  id="setHeaterDeadband"
 			  class="input-small"
 			  type="number"
 			  step="0.1"
-			  min="0.1"
-			  max="5.0">
+			  min="0"
+			  max="2.0">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Minimum Switch Interval</div>
+			  <div class="setting-desc">
+				Default 10 s. Increase to reduce switching; decrease for faster correction.
+			  </div>
+			</div>
+
+			<input
+			  id="setHeaterMinSwitchSec"
+			  class="input-small"
+			  type="number"
+			  min="1"
+			  max="120">
 		  </div>
 
 		</div>
