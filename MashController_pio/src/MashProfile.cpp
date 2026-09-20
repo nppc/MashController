@@ -8,6 +8,7 @@ Profile activeProfile;
 
 bool isRunning = false;
 bool isPaused = false;
+bool grainPause = false;
 int currentStep = 0;
 bool waitingForTemp = false;
 
@@ -53,6 +54,7 @@ void advanceStep() {
   if (currentStep >= activeProfile.stepCount) {
     heaterOn = false;           // Turn off heater immediately
     targetTemperature = 20.0;
+    grainPause = false;
 
     // Start cool-down: mixer runs in AUTO mode to circulate while cooling
     mixerManualMode = false;    // Switch to AUTO for cool-down circulation
@@ -100,8 +102,15 @@ void mashProfileTick() {
   if (waitingForTemp) {
     if (currentTemp >= targetTemperature - 0.5) {   // tolerance
       waitingForTemp = false;
-      stepStartTime = millis();                     // NOW start timer
-      Serial.println("Step timer started");
+      if (currentStep == 0) {
+        isPaused = true;
+        grainPause = true;
+        pausedElapsedSec = 0;
+        Serial.println("Initial temperature reached; waiting for grain addition");
+      } else {
+        stepStartTime = millis();                   // NOW start timer
+        Serial.println("Step timer started");
+      }
     }
   } else {
     // Timer is running normally

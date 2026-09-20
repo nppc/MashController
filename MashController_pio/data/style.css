@@ -426,6 +426,26 @@
   color: #e8c547;
 }
 
+@keyframes grain-pause-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 224, 138, 0.15); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 224, 138, 0); }
+}
+
+.pause-instruction {
+  color: #ffe08a;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: -4px 0 14px;
+}
+
+.pause-instruction.grain-pause {
+  animation: grain-pause-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pause-instruction.grain-pause { animation: none; }
+}
+
 .remaining-time {
   font-size: 30px;
   font-weight: 700;

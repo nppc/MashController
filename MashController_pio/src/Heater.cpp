@@ -19,7 +19,7 @@ constexpr float RATE_FILTER_ALPHA = 0.25f;
 }
 
 void updateHeater(float currentTemp) {
-  if (!isRunning || isPaused || inCoolDown) {
+  if (!isRunning || inCoolDown) {
     heaterOn = false;
     haveSample = false;
     haveFilteredTemperature = false;

@@ -30,7 +30,9 @@ void outputsInit() {
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
   digitalWrite(HEATER_PIN,
-               heaterOn && isRunning && !isPaused && !inCoolDown ? HIGH : LOW);
+           heaterOn && isRunning && !inCoolDown
+             ? HIGH
+             : LOW);
 
   if (!mixerOn) {
     analogWrite(MIXER_PIN, MIXER_PWM_RANGE);

@@ -114,8 +114,11 @@ function updateProcessUI(st) {
   const isPaused = st.paused ?? false;             
   const isRunning = st.running ?? false;           
   const inCoolDown = st.coolDownActive ?? false;   
+  const isGrainPause = st.grainPause ?? false;
+  const instruction = document.getElementById('pauseInstruction');
+  const resumeButton = document.getElementById('btnResume');
 
-	badge.classList.remove('running', 'paused', 'cooldown');
+  badge.classList.remove('running', 'paused', 'cooldown');
 	if (inCoolDown) {
 		badge.textContent = 'Cooling Down';
 		badge.classList.add('cooldown');
@@ -132,6 +135,11 @@ function updateProcessUI(st) {
 	const timerEl = document.getElementById('remainingTime');
 	timerEl.textContent = formatTime(inCoolDown ? (st.coolDownRemaining ?? 0) : (st.remaining ?? 0));
 	timerEl.classList.toggle('inactive', !isRunning && !inCoolDown);
+  if (instruction) {
+    instruction.classList.toggle('hidden', !isRunning || !isGrainPause);
+    instruction.classList.toggle('grain-pause', isRunning && isGrainPause);
+  }
+  resumeButton.textContent = 'RESUME';
   
 	document.getElementById('btnStart').classList.toggle('hidden', isRunning || inCoolDown);
 	document.getElementById('btnPause').classList.toggle('hidden', !isRunning || isPaused || inCoolDown);

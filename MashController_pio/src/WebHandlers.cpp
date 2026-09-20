@@ -289,6 +289,7 @@ static void handleStartProfile() {
   currentStep = 0;
   isRunning = true;
   isPaused = false;
+  grainPause = false;
 
   targetTemperature = activeProfile.steps[0].temp;
 
@@ -309,6 +310,7 @@ static void handleStartProfile() {
 static void handleStopProfile() {
   isRunning = false;
   isPaused = false;
+  grainPause = false;
   waitingForTemp = false;
   targetTemperature = 20.0;
   heaterOn = false;
@@ -343,6 +345,7 @@ static void handleResumeProfile() {
       stepStartTime = millis() - (pausedElapsedSec * 1000);
     }
     isPaused = false;
+    grainPause = false;
 
     // Hand the mixer back to auto, starting a fresh rest phase rather
     // than resuming wherever the cycle was before it got paused off.
@@ -460,6 +463,7 @@ static void handleStatus() {
 
   doc["running"] = isRunning;
   doc["paused"] = isPaused;
+  doc["grainPause"] = grainPause;
   doc["profileName"] = activeProfile.name;
   doc["step"] = currentStep;
   doc["stepTemp"] = targetTemperature;
