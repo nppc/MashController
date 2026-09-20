@@ -417,6 +417,10 @@ function updateProfileNameField() {
   const nameInput = document.getElementById('profileName');
   if (profiles[currentProfileIndex]) {
     nameInput.value = profiles[currentProfileIndex].name;
+    document.getElementById('profileWaterMass').value =
+      profiles[currentProfileIndex].waterMassKg ?? 20;
+    document.getElementById('profileGrainMass').value =
+      profiles[currentProfileIndex].grainMassKg ?? 5;
   }
 }
 
@@ -536,6 +540,10 @@ function updateProfileName(name) {
   updateMainScreenProfileName();
 }
 
+function updateProfileMass(field, value) {
+  profiles[currentProfileIndex][field] = Math.max(0, Number(value));
+}
+
 /* Update step */
 function updateStep(index, field, value) {
   profiles[currentProfileIndex].steps[index][field] = Number(value);
@@ -601,6 +609,8 @@ function addProfile() {
 
     profiles.push({
         name: profileName,
+      waterMassKg: 20,
+      grainMassKg: 5,
         steps: [{ temp: 52, time: 20 }]
     });
 
@@ -648,6 +658,8 @@ async function deleteProfile() {
   if (profiles.length === 0) {
     profiles.push({
       name: "New Profile",
+      waterMassKg: 20,
+      grainMassKg: 5,
       steps: [
         { temp: 52, time: 20 },
         { temp: 63, time: 40 }
@@ -721,17 +733,14 @@ async function loadSettings() {
         const res = await fetch('settings');
         settings = await res.json();
 
-        document.getElementById('setHeaterOffPredictionSec').value =
-          settings.heaterOffPredictionSec ?? 240;
+        document.getElementById('setHeaterTransferCoeff').value =
+          settings.heaterTransferCoeff ?? 20;
 
-        document.getElementById('setHeaterOnPredictionSec').value =
-          settings.heaterOnPredictionSec ?? 60;
+        document.getElementById('setHeaterThermalMass').value =
+          settings.heaterThermalMass ?? 5000;
 
-        document.getElementById('setHeaterDeadband').value =
-          (settings.heaterDeadband ?? 0.1).toFixed(1);
-
-        document.getElementById('setHeaterMinSwitchSec').value =
-          settings.heaterMinSwitchSec ?? 10;
+        document.getElementById('setHeaterPowerW').value =
+          settings.heaterPowerW ?? 2000;
 
         document.getElementById('setMixerOnSec').value =
             settings.mixerOnSec ?? 5;
@@ -821,20 +830,16 @@ async function saveSettings() {
     try {
 
         const payload = {
-            heaterOffPredictionSec: parseInt(
-              document.getElementById('setHeaterOffPredictionSec').value
+            heaterTransferCoeff: parseFloat(
+              document.getElementById('setHeaterTransferCoeff').value
             ),
 
-            heaterOnPredictionSec: parseInt(
-              document.getElementById('setHeaterOnPredictionSec').value
+            heaterThermalMass: parseFloat(
+              document.getElementById('setHeaterThermalMass').value
             ),
 
-            heaterDeadband: parseFloat(
-              document.getElementById('setHeaterDeadband').value
-            ),
-
-            heaterMinSwitchSec: parseInt(
-              document.getElementById('setHeaterMinSwitchSec').value
+            heaterPowerW: parseFloat(
+              document.getElementById('setHeaterPowerW').value
             ),
 
             mixerOnSec: parseInt(

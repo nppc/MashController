@@ -15,7 +15,7 @@
 #define STORAGE_PASS_LEN     24
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      9             // bump if the struct layout changes
+#define STORAGE_VERSION      11            // bump if the struct layout changes
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
@@ -29,14 +29,17 @@ struct StepEE {
 struct ProfileEE {
   char    name[STORAGE_NAME_LEN];
   uint8_t stepCount;
+  float   waterMassKg;
+  float   grainMassKg;
   StepEE  steps[STORAGE_MAX_STEPS];
 };
 
 struct SettingsEE {
   char     wifiSSID[STORAGE_SSID_LEN];
   char     wifiPass[STORAGE_PASS_LEN];
-  uint16_t heaterOffPredictionSec; // seconds ahead before switching off
-  uint16_t heaterOnPredictionSec;  // seconds ahead before switching on
+  float    heaterTransferCoeff;  // k, watts per degree C
+  float    heaterThermalMass;    // C_e, joules per degree C
+  float    heaterPowerW;         // installed heater electrical power
   float    heaterDeadband;       // degrees C below target before switching on
   uint16_t heaterMinSwitchSec;   // minimum time between heater switches
   uint8_t  mixerRestSec;         // length of the rest period

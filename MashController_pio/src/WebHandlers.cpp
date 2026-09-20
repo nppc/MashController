@@ -8,6 +8,7 @@
 #include "Storage.h"
 #include "Sensor.h"
 #include "Heater.h"
+#include "Calibration.h"
 #include "Mixer.h"
 #include "MashProfile.h"
 
@@ -73,6 +74,8 @@ static void handleGetProfiles() {
 
     JsonObject o = arr.createNestedObject();
     o["name"] = p.name;
+    o["waterMassKg"] = p.waterMassKg;
+    o["grainMassKg"] = p.grainMassKg;
 
     JsonArray steps = o.createNestedArray("steps");
     for (uint8_t s = 0; s < p.stepCount; s++) {
@@ -123,6 +126,8 @@ static void handleSaveProfiles() {
 
     const char *name = p["name"] | "Profile";
     strncpy(pe.name, name, STORAGE_NAME_LEN - 1);
+    pe.waterMassKg = max(p["waterMassKg"].as<float>(), 0.1f);
+    pe.grainMassKg = max(p["grainMassKg"].as<float>(), 0.0f);
 
     JsonArray steps = p["steps"].as<JsonArray>();
     pe.stepCount = min((int)steps.size(), (int)STORAGE_MAX_STEPS);
@@ -144,6 +149,30 @@ static void handleSaveProfiles() {
   server.send(200, "text/plain", "Saved");
 }
 
+static void handleCalibrationStart() {
+  const float waterLiters = server.arg("liters").toFloat();
+  if (waterLiters < 0.1f || waterLiters > 100.0f) {
+    server.send(400, "text/plain", "Water volume must be between 0.1 and 100 litres");
+    return;
+  }
+  if (!calibrationStart(waterLiters)) {
+    server.send(409, "text/plain", "Controller is busy");
+    return;
+  }
+  server.send(200, "text/plain", "Calibration started");
+}
+
+static void handleCalibrationStop() {
+  calibrationStop();
+  server.send(200, "text/plain", "Calibration stopped");
+}
+
+static void handleCalibrationStatus() {
+  String out;
+  calibrationStatusJson(out);
+  server.send(200, "application/json", out);
+}
+
 /* -------------------------------------------------------------------------- */
 /*                         SETTINGS (REST API, EEPROM)                        */
 /* -------------------------------------------------------------------------- */
@@ -155,8 +184,9 @@ static void handleGetSettings() {
   doc["wifiSSID"] = s.wifiSSID;
   // Password is never echoed back - only whether one is currently set.
   doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
-  doc["heaterOffPredictionSec"] = s.heaterOffPredictionSec;
-  doc["heaterOnPredictionSec"] = s.heaterOnPredictionSec;
+  doc["heaterTransferCoeff"] = s.heaterTransferCoeff;
+  doc["heaterThermalMass"] = s.heaterThermalMass;
+  doc["heaterPowerW"] = s.heaterPowerW;
   doc["heaterDeadband"] = s.heaterDeadband;
   doc["heaterMinSwitchSec"] = s.heaterMinSwitchSec;
   doc["mixerOnSec"] = s.mixerOnSec;
@@ -197,17 +227,27 @@ static void handleSaveSettings() {
 
   if (doc.containsKey("wifiSSID")) {
     strncpy(s.wifiSSID, doc["wifiSSID"] | s.wifiSSID, STORAGE_SSID_LEN - 1);
+    s.wifiSSID[STORAGE_SSID_LEN - 1] = '\0';
   }
   // Only overwrite the stored password if a non-empty one was actually sent,
   // so the frontend can leave the password field blank to "keep current".
   if (doc.containsKey("wifiPass") && strlen(doc["wifiPass"] | "") > 0) {
+    const char *password = doc["wifiPass"] | "";
+    if (strlen(password) < 8) {
+      server.send(400, "text/plain", "WiFi password must be at least 8 characters");
+      return;
+    }
     strncpy(s.wifiPass, doc["wifiPass"], STORAGE_PASS_LEN - 1);
+    s.wifiPass[STORAGE_PASS_LEN - 1] = '\0';
   }
-  if (doc.containsKey("heaterOffPredictionSec")) {
-    s.heaterOffPredictionSec = doc["heaterOffPredictionSec"].as<float>();
+  if (doc.containsKey("heaterTransferCoeff")) {
+    s.heaterTransferCoeff = max(doc["heaterTransferCoeff"].as<float>(), 0.1f);
   }
-  if (doc.containsKey("heaterOnPredictionSec")) {
-    s.heaterOnPredictionSec = doc["heaterOnPredictionSec"].as<float>();
+  if (doc.containsKey("heaterThermalMass")) {
+    s.heaterThermalMass = max(doc["heaterThermalMass"].as<float>(), 1.0f);
+  }
+  if (doc.containsKey("heaterPowerW")) {
+    s.heaterPowerW = max(doc["heaterPowerW"].as<float>(), 1.0f);
   }
   if (doc.containsKey("heaterDeadband")) {
     s.heaterDeadband = doc["heaterDeadband"].as<float>();
@@ -279,6 +319,11 @@ static void handleData() {
 }
 
 static void handleStartProfile() {
+  if (calibrationIsActive()) {
+    server.send(409, "text/plain", "Calibration is running");
+    return;
+  }
+
   int idx = server.arg("profile").toInt();
 
   if (!loadProfile(idx)) {
@@ -292,6 +337,7 @@ static void handleStartProfile() {
   grainPause = false;
 
   targetTemperature = activeProfile.steps[0].temp;
+  heaterResetThermalModel(readTemperature(), activeProfile.waterMassKg);
 
   // Do NOT start timer yet
   waitingForTemp = true;
@@ -524,6 +570,8 @@ void webHandlersInit() {
   server.on("/script.js", []() { handleFileRead("/script.js"); });
   server.on("/chart.js", []() { handleFileRead("/chart.js"); });
   server.on("/ota.html", []() { handleFileRead("/ota.html"); });
+  server.on("/calibration.html", []() { handleFileRead("/calibration.html"); });
+  server.on("/calibration.js", []() { handleFileRead("/calibration.js"); });
   server.on("/enable-ota", HTTP_GET, handleEnableOta);
   server.on("/update", HTTP_POST, handleUpdateResult, handleUpdateUpload);
 
@@ -543,6 +591,9 @@ void webHandlersInit() {
   server.on("/mixerMode", HTTP_POST, handleMixerMode);
   server.on("/mixerToggle", HTTP_POST, handleMixerToggle);
   server.on("/status", handleStatus);
+  server.on("/calibrationStart", HTTP_POST, handleCalibrationStart);
+  server.on("/calibrationStop", HTTP_POST, handleCalibrationStop);
+  server.on("/calibrationStatus", HTTP_GET, handleCalibrationStatus);
 }
 
 void otaUpdate() {

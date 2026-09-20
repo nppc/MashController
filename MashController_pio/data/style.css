@@ -940,6 +940,269 @@ button:disabled {
     font-weight: 600;
 }
 
+.help-link {
+  color: var(--accent2);
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+.help-link:hover {
+  color: var(--text);
+}
+
+.profile-mass-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.calibration-page {
+  margin: 0 auto;
+  max-width: 640px;
+}
+
+.calibration-page h1 {
+  font-size: 24px;
+  margin: 8px 0 12px;
+}
+
+.calibration-page h2 {
+  font-size: 16px;
+  margin: 24px 0 6px;
+}
+
+.calibration-page p {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.calibration-lead {
+  color: var(--text) !important;
+}
+
+.calibration-steps {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 12px 0 0 20px;
+}
+
+.calibration-steps li {
+  margin-bottom: 10px;
+  padding-left: 4px;
+}
+
+.calibration-steps strong {
+  color: var(--text);
+}
+
+.formula-block {
+  background: #121827;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 12px 0;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.calibration-note {
+  border-left: 3px solid var(--accent);
+  margin-top: 20px;
+  padding-left: 12px;
+}
+
+.calibration-back {
+  display: inline-block;
+  margin-top: 24px;
+  text-decoration: none;
+}
+
+.calibration-console {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 20px 0 28px;
+  padding: 14px;
+}
+
+.calibration-card {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.section-kicker {
+  color: var(--accent2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.calibration-console-header,
+.calibration-live-grid {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.calibration-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.calibration-live-grid {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+  padding: 12px 0;
+}
+
+.calibration-live-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calibration-live-grid span {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.calibration-live-grid strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.calibration-console-note {
+  font-size: 12px !important;
+  margin: 10px 0 14px;
+}
+
+.calibration-table {
+  display: none;
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+
+.calibration-live-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.live-metric {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.live-metric span {
+  color: var(--text-dim);
+  display: block;
+  font-size: 12px;
+}
+
+.live-metric strong {
+  color: var(--text);
+  display: block;
+  font-size: 16px;
+  margin-top: 5px;
+}
+
+.calibration-table th,
+.calibration-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 7px 4px;
+  text-align: left;
+}
+
+.calibration-table th {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.calibration-result {
+  background: rgba(62, 207, 142, 0.1);
+  border: 1px solid var(--accent2);
+  border-radius: 8px;
+  line-height: 1.6;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.result-heading {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.result-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.result-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result-grid span {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.result-values {
+  border-top: 1px solid var(--border);
+  font-size: 16px;
+  line-height: 1.7;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.result-apply {
+  display: block;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.calibration-saved {
+  color: var(--accent2);
+  margin-top: 8px;
+}
+
+.calibration-error {
+  color: var(--accent);
+  margin-top: 8px;
+}
+
+@media (max-width: 480px) {
+  .calibration-console-header,
+  .calibration-live-grid {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .calibration-controls,
+  .calibration-controls .btn {
+    width: 100%;
+  }
+}
+
 .setting-desc {
     color: var(--text-dim);
     font-size: 12px;

@@ -2,6 +2,7 @@
 #include "Outputs.h"
 #include "Config.h"
 #include "Heater.h"
+#include "Calibration.h"
 #include "Mixer.h"
 #include "MashProfile.h"
 
@@ -30,7 +31,8 @@ void outputsInit() {
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
   digitalWrite(HEATER_PIN,
-           heaterOn && isRunning && !inCoolDown
+           (heaterOn && isRunning && !inCoolDown) ||
+           (calibrationIsActive() && calibrationHeaterIsOn())
              ? HIGH
              : LOW);
 

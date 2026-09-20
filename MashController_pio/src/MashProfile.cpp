@@ -33,6 +33,8 @@ bool loadProfile(int index) {
   }
 
   activeProfile.name = String(p.name);
+  activeProfile.waterMassKg = p.waterMassKg;
+  activeProfile.grainMassKg = p.grainMassKg;
   activeProfile.stepCount = p.stepCount;
 
   for (int i = 0; i < activeProfile.stepCount; i++) {
@@ -103,6 +105,7 @@ void mashProfileTick() {
     if (currentTemp >= targetTemperature - 0.5) {   // tolerance
       waitingForTemp = false;
       if (currentStep == 0) {
+        heaterIncludeGrain(activeProfile.grainMassKg);
         isPaused = true;
         grainPause = true;
         pausedElapsedSec = 0;

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heater Calibration</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="calibration.js" defer></script>
+</head>
+<body>
+  <main class="screen active calibration-page">
+    <div class="stat-card">
+      <div class="label">Heater Calibration</div>
+      <h1>Thermal model setup</h1>
+      <p class="calibration-lead">
+        Calibrate these three hardware values once. They describe the heater and
+        element, not a particular brew profile.
+      </p>
+
+      <section class="calibration-console">
+        <div class="calibration-console-header">
+          <div>
+            <div class="label">Automatic Test</div>
+            <div id="calibrationPhase">Ready</div>
+          </div>
+          <div class="calibration-controls">
+            <button class="btn green" id="calibrationStart">Start Calibration</button>
+            <button class="btn hidden" id="calibrationStop">Stop</button>
+          </div>
+        </div>
+        <label class="calibration-volume">
+          <span>Water volume (litres)</span>
+          <input id="calibrationWaterLiters" class="input-small" type="number" min="0.1" max="100" step="0.1" value="10">
+        </label>
+        <div class="calibration-live-grid">
+          <div><span>Temperature</span><strong id="calibrationTemp">--.- °C</strong></div>
+          <div><span>Elapsed</span><strong id="calibrationElapsed">00:00</strong></div>
+          <div><span>Heater</span><strong class="heater-badge off" id="calibrationHeater">OFF</strong></div>
+        </div>
+        <p class="calibration-console-note">
+          Before starting, add the selected amount of plain water and start the mixer.
+          Heater Power must already be entered in Settings. The test heats to
+          50 °C, then cools until the temperature drops 2 °C from its peak.
+        </p>
+        <div class="calibration-live-metrics" id="calibrationLiveMetrics">
+          <div class="live-metric"><span>Recent rate</span><strong>--</strong></div>
+          <div class="live-metric"><span>Average heating rate</span><strong>--</strong></div>
+          <div class="live-metric"><span>Water power</span><strong>--</strong></div>
+          <div class="live-metric"><span>Model fit</span><strong>--</strong></div>
+        </div>
+        <table class="calibration-table">
+          <thead><tr><th>Time</th><th>Phase</th><th>Temperature</th></tr></thead>
+          <tbody id="calibrationSamples"></tbody>
+        </table>
+        <div class="calibration-result hidden" id="calibrationResult"></div>
+      </section>
+
+      <h2>Heater Power</h2>
+      <p>
+        Enter the actual electrical heater power in watts. Use the rated power
+        of the element, or measure it at the operating voltage.
+      </p>
+
+      <h2>Heat Transfer Coefficient (k)</h2>
+      <p>
+        This describes how quickly heat moves from the element into the water,
+        in watts per degree Celsius. Use plain water and the same mixer and
+        hardware arrangement used during brewing.
+      </p>
+
+      <h2>Element Thermal Mass (C_e)</h2>
+      <p>
+        This describes how much heat the element can store per degree Celsius,
+        in joules per degree Celsius. It is estimated together with k from
+        heating behavior and should remain stable for the same hardware.
+      </p>
+
+      <section class="calibration-card">
+        <div class="section-kicker">Before starting</div>
+        <h2>Prepare the test</h2>
+        <ol class="calibration-steps">
+          <li>Add the selected volume of plain water to the bowl.</li>
+          <li>Put the sensor in the mixed water, away from the heater, and start the mixer.</li>
+          <li>In Settings, enter the heater's measured or rated <strong>Heater Power</strong>. The calibration page reads that value automatically.</li>
+          <li>Keep the same vessel, sensor position, mixer speed, and heater voltage used for brewing.</li>
+        </ol>
+      </section>
+
+      <section class="calibration-card">
+        <div class="section-kicker">Automatic calculation</div>
+        <h2>How the result is calculated</h2>
+        <p>The device logs temperature every minute. The page uses every logged value to simulate the two thermal masses and searches for the `k` and `C_e` pair with the smallest curve error.</p>
+        <div class="formula-block">
+          <div><strong>C_w</strong> = water volume × 4186 J/(kg·°C)</div>
+          <div><strong>Q_water</strong> = C_w × (T_heat-end − T0)</div>
+          <div><strong>P_water</strong> = Q_water / heating time</div>
+          <div><strong>τ_element</strong> = C_e / k</div>
+          <div><strong>Fit error</strong> = sum(model temperature − logged temperature)²</div>
+        </div>
+        <p class="calibration-note">The test stops at 50 °C and after a 2 °C measured cooldown drop. It does not wait for the water to reach ambient temperature.</p>
+      </section>
+
+      <p class="calibration-note">
+        Do not add grain during calibration. Use the same heater power and
+        mixer arrangement as the real brew, and never leave the heater running
+        unattended.
+      </p>
+
+      <a class="btn calibration-back" href="/">Back to controller</a>
+    </div>
+  </main>
+</body>
+</html>

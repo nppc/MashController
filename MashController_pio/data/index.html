@@ -139,6 +139,21 @@
 				   onchange="updateProfileName(this.value)"
 				   style="margin-bottom:12px">
 
+			<div class="profile-mass-grid">
+			  <div>
+				<div class="label-small">Water Mass (kg)</div>
+				<input id="profileWaterMass" class="input-small" type="number"
+					   step="0.1" min="0.1" max="100"
+					   onchange="updateProfileMass('waterMassKg', this.value)">
+			  </div>
+			  <div>
+				<div class="label-small">Grain Mass (kg)</div>
+				<input id="profileGrainMass" class="input-small" type="number"
+					   step="0.1" min="0" max="50"
+					   onchange="updateProfileMass('grainMassKg', this.value)">
+			  </div>
+			</div>
+
 			<!-- Контейнер шагов -->
 			<div id="stepsContainer"></div>
 
@@ -155,75 +170,51 @@
 	<div id="settings" class="screen">
 
 	  <div class="stat-card">
-		<div class="label">Temperature Control</div>
+		<div class="label">Current Brew</div>
 
 		<div class="settings-group">
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Switch-Off Prediction Horizon</div>
+			  <div class="setting-title">Heat Transfer Coefficient <a class="help-link" href="calibration.html">?</a></div>
 			  <div class="setting-desc">
-				Default 240 s. Increase if temperature overshoots target; decrease if heating stops too early.
+				Calibrated hardware value k, in watts per °C.
 			  </div>
 			</div>
 
 			<input
-			  id="setHeaterOffPredictionSec"
-			  class="input-small"
-			  type="number"
-			  step="1"
-			  min="1"
-			  max="600">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
-			  <div class="setting-title">Switch-On Prediction Horizon</div>
-			  <div class="setting-desc">
-				Default 60 s. Increase if temperature falls too far; decrease if heating resumes too early.
-			  </div>
-			</div>
-
-			<input
-			  id="setHeaterOnPredictionSec"
-			  class="input-small"
-			  type="number"
-			  step="1"
-			  min="1"
-			  max="300">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
-			  <div class="setting-title">Temperature Deadband</div>
-			  <div class="setting-desc">
-				Default 0.1 °C. Increase if switching is frequent; decrease for tighter temperature control.
-			  </div>
-			</div>
-
-			<input
-			  id="setHeaterDeadband"
+			  id="setHeaterTransferCoeff"
 			  class="input-small"
 			  type="number"
 			  step="0.1"
-			  min="0"
-			  max="2.0">
+			  min="0.1"
+			  max="200">
 		  </div>
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Minimum Switch Interval</div>
+			  <div class="setting-title">Element Thermal Mass <a class="help-link" href="calibration.html">?</a></div>
 			  <div class="setting-desc">
-				Default 10 s. Increase to reduce switching; decrease for faster correction.
+				Calibrated hardware value C_e, in joules per °C.
 			  </div>
 			</div>
 
 			<input
-			  id="setHeaterMinSwitchSec"
+			  id="setHeaterThermalMass"
 			  class="input-small"
 			  type="number"
+			  step="10"
 			  min="1"
-			  max="120">
+			  max="50000">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Heater Power</div>
+			  <div class="setting-desc">Installed heater power in watts.</div>
+			</div>
+			<input id="setHeaterPowerW" class="input-small" type="number"
+				   step="10" min="1" max="10000">
 		  </div>
 
 		</div>

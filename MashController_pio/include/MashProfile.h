@@ -10,6 +10,8 @@ struct Step {
 
 struct Profile {
   String name;
+  float waterMassKg;
+  float grainMassKg;
   Step steps[6];
   int stepCount;
 };

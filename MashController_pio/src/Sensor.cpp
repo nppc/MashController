@@ -15,6 +15,7 @@ int histIndex = 0;
 
 static unsigned long conversionStartTime = 0;
 static unsigned long nextConversionAllowedAt = 0;
+constexpr uint8_t TEMPERATURE_AVERAGE_SAMPLES = 5;
 
 static void addTemp(float t) {
   tempHistory[histIndex % HISTORY_SIZE] = t;
@@ -71,9 +72,18 @@ String sensorAddressToString() {
   return out;
 }
 
-// Cheap getter - safe to call anytime (e.g. from handleStatus()); never blocks.
+// Shared filtered reading for the heater, mash control, calibration, and UI.
+// The raw latest value remains available as lastGoodTemp.
 float readTemperature() {
-  return lastGoodTemp;
+  const int available = min(histIndex, (int)TEMPERATURE_AVERAGE_SAMPLES);
+  if (available <= 0) return lastGoodTemp;
+
+  float total = 0.0f;
+  const int first = histIndex - available;
+  for (int i = 0; i < available; i++) {
+    total += tempHistory[(first + i) % HISTORY_SIZE];
+  }
+  return total / available;
 }
 
 void sensorInit() {
@@ -215,8 +225,8 @@ void sensorUpdate() {
     } else {
       sensorOk = true;
       lastGoodTemp = t;
-      updateHeater(lastGoodTemp);
       addTemp(lastGoodTemp);
+      updateHeater(readTemperature());
     }
 
     conversionInProgress = false;   // next call starts a fresh conversion
