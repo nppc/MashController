@@ -6,12 +6,15 @@ bool heaterOn = false;
 
 namespace {
 float previousTemperature = 0.0f;
+float filteredTemperature = 0.0f;
 float filteredTemperatureRate = 0.0f;
 float previousTarget = 0.0f;
 unsigned long previousSampleAt = 0;
 unsigned long lastSwitchAt = 0;
 bool haveSample = false;
+bool haveFilteredTemperature = false;
 bool hasSwitched = false;
+constexpr float TEMP_FILTER_ALPHA = 0.35f;
 constexpr float RATE_FILTER_ALPHA = 0.25f;
 }
 
@@ -19,6 +22,7 @@ void updateHeater(float currentTemp) {
   if (!isRunning || isPaused || inCoolDown) {
     heaterOn = false;
     haveSample = false;
+    haveFilteredTemperature = false;
     hasSwitched = false;
     return;
   }
@@ -26,8 +30,16 @@ void updateHeater(float currentTemp) {
   SettingsEE &settings = storage.settings();
   const unsigned long now = millis();
 
+  if (!haveFilteredTemperature) {
+    filteredTemperature = currentTemp;
+    haveFilteredTemperature = true;
+  } else {
+    filteredTemperature += TEMP_FILTER_ALPHA *
+                           (currentTemp - filteredTemperature);
+  }
+
   if (!haveSample || previousTarget != targetTemperature) {
-    previousTemperature = currentTemp;
+    previousTemperature = filteredTemperature;
     previousTarget = targetTemperature;
     previousSampleAt = now;
     filteredTemperatureRate = 0.0f;
@@ -36,10 +48,11 @@ void updateHeater(float currentTemp) {
     const unsigned long elapsedMs = now - previousSampleAt;
     if (elapsedMs > 0) {
       const float elapsedSec = elapsedMs / 1000.0f;
-      const float measuredRate = (currentTemp - previousTemperature) / elapsedSec;
+      const float measuredRate =
+          (filteredTemperature - previousTemperature) / elapsedSec;
       filteredTemperatureRate += RATE_FILTER_ALPHA *
                                  (measuredRate - filteredTemperatureRate);
-      previousTemperature = currentTemp;
+      previousTemperature = filteredTemperature;
       previousSampleAt = now;
     }
   }
@@ -50,10 +63,10 @@ void updateHeater(float currentTemp) {
 
   if (switchLocked) return;
 
-  const float predictedOnTemperature = currentTemp +
+  const float predictedOnTemperature = filteredTemperature +
                                        filteredTemperatureRate *
                                        settings.heaterOnPredictionSec;
-  const float predictedOffTemperature = currentTemp +
+  const float predictedOffTemperature = filteredTemperature +
                                         filteredTemperatureRate *
                                         settings.heaterOffPredictionSec;
 

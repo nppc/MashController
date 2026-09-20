@@ -846,13 +846,17 @@ async function saveSettings() {
             wifiPass: document.getElementById('setWifiPass').value
         };
 
-        await fetch('saveSettings', {
+        const response = await fetch('saveSettings', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
         });
+
+        if (!response.ok) {
+          throw new Error(`Settings save failed (${response.status})`);
+        }
 
         showToast('Settings saved');
 

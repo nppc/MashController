@@ -186,7 +186,7 @@ static void handleSaveSettings() {
     return;
   }
 
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<512> doc;
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
     server.send(400, "text/plain", "JSON parse error");
