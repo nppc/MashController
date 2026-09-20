@@ -57,7 +57,7 @@ async function updateStatus() {
       Number(st.currentTemp).toFixed(1);
 
     document.getElementById('targetTemp').textContent =
-      Number(st.stepTemp).toFixed(1);
+      st.running ? Number(st.stepTemp).toFixed(1) : '--.-';
 
     if (st.running && st.profileName)
       document.getElementById('activeProfileName').textContent =
