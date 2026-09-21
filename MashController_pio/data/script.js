@@ -64,12 +64,7 @@ async function updateStatus() {
         st.profileName;
     }
 
-    const detailsEl = document.getElementById('activeProfileDetails');
-    if (detailsEl) {
-      const w = st.waterMassKg !== undefined ? Number(st.waterMassKg).toFixed(1) : '--';
-      const g = st.grainMassKg !== undefined ? Number(st.grainMassKg).toFixed(1) : '--';
-      detailsEl.textContent = `Water: ${w} kg | Grain: ${g} kg`;
-    }
+    updateMainScreenProfileDetails(st);
 
 	renderMainSteps();
   } catch (e) {
@@ -407,12 +402,14 @@ async function loadProfiles() {
       currentProfileIndex = Number(sel.value);
       updateProfileNameField();
       updateMainScreenProfileName();
+      updateMainScreenProfileDetails();
       renderSteps();
     };
 
     // Load first profile
     updateProfileNameField();
     updateMainScreenProfileName();
+    updateMainScreenProfileDetails();
     renderSteps();
 
   } catch (e) {
@@ -426,9 +423,9 @@ function updateProfileNameField() {
   if (profiles[currentProfileIndex]) {
     nameInput.value = profiles[currentProfileIndex].name;
     document.getElementById('profileWaterMass').value =
-      profiles[currentProfileIndex].waterMassKg ?? 20;
+      Number(profiles[currentProfileIndex].waterMassKg ?? 20).toFixed(1);
     document.getElementById('profileGrainMass').value =
-      profiles[currentProfileIndex].grainMassKg ?? 5;
+      Number(profiles[currentProfileIndex].grainMassKg ?? 5).toFixed(1);
   }
 }
 
@@ -440,6 +437,18 @@ function updateMainScreenProfileName() {
   } else {
     el.textContent = '--';
   }
+}
+
+function updateMainScreenProfileDetails(status) {
+  const detailsEl = document.getElementById('activeProfileDetails');
+  const profile = profiles[currentProfileIndex];
+  if (!detailsEl) return;
+
+  const waterMass = profile?.waterMassKg ?? status?.waterMassKg;
+  const grainMass = profile?.grainMassKg ?? status?.grainMassKg;
+  const w = waterMass !== undefined ? Number(waterMass).toFixed(1) : '--';
+  const g = grainMass !== undefined ? Number(grainMass).toFixed(1) : '--';
+  detailsEl.textContent = `Water: ${w} kg | Grain: ${g} kg`;
 }
 
 /* Render steps */
@@ -550,6 +559,7 @@ function updateProfileName(name) {
 
 function updateProfileMass(field, value) {
   profiles[currentProfileIndex][field] = Math.max(0, Number(value));
+  updateMainScreenProfileDetails();
 }
 
 /* Update step */
@@ -599,6 +609,7 @@ async function saveProfiles() {
 
     updateProfileNameField();
     updateMainScreenProfileName();
+    updateMainScreenProfileDetails();
     renderSteps();
 
   } catch (e) {
@@ -696,6 +707,7 @@ async function deleteProfile() {
 
   updateProfileNameField();
   updateMainScreenProfileName();
+  updateMainScreenProfileDetails();
   renderSteps();
 }
 
@@ -730,7 +742,10 @@ function closeProfilePicker(e) {
 
 function selectProfile(index) {
   currentProfileIndex = index;
+  updateProfileNameField();
   updateMainScreenProfileName();
+  updateMainScreenProfileDetails();
+  renderSteps();
 
   const sel = document.getElementById('profileSelect');
   if (sel) sel.value = index;
