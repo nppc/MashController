@@ -21,7 +21,7 @@ extern Profile activeProfile;
 /* ---- Mash profile execution ---- */
 extern bool isRunning;
 extern bool isPaused;
-extern bool grainPause;
+extern bool waitingForUser;
 extern int currentStep;
 extern bool waitingForTemp;
 

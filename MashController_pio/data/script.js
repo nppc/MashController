@@ -52,7 +52,7 @@ async function updateStatus() {
     controllerStatus = st;
 
     updateProcessUI(st);
-	
+
     document.getElementById('curTemp').textContent =
       Number(st.currentTemp).toFixed(1);
 
@@ -66,7 +66,15 @@ async function updateStatus() {
 
     updateMainScreenProfileDetails(st);
 
-	renderMainSteps();
+    renderMainSteps();
+
+    // Hide the target line immediately when stopped or cooling down,
+    // instead of waiting for the next update() poll
+    if ((!st.running || st.coolDownActive) &&
+        chart.data.datasets[1].data.length) {
+      chart.data.datasets[1].data = [];
+      chart.update('none');
+    }
   } catch (e) {
     console.error('Status error', e);
   }
@@ -117,7 +125,8 @@ function updateProcessUI(st) {
   const isPaused = st.paused ?? false;             
   const isRunning = st.running ?? false;           
   const inCoolDown = st.coolDownActive ?? false;   
-  const isGrainPause = st.grainPause ?? false;
+  const waitingForUser = st.waitingForUser ?? false;
+  const waitingForTemperature = st.waiting ?? false;
   const instruction = document.getElementById('pauseInstruction');
   const resumeButton = document.getElementById('btnResume');
 
@@ -139,15 +148,26 @@ function updateProcessUI(st) {
 	timerEl.textContent = formatTime(inCoolDown ? (st.coolDownRemaining ?? 0) : (st.remaining ?? 0));
 	timerEl.classList.toggle('inactive', !isRunning && !inCoolDown);
   if (instruction) {
-    instruction.classList.toggle('hidden', !isRunning || !isGrainPause);
-    instruction.classList.toggle('grain-pause', isRunning && isGrainPause);
+    const showPauseMessage = isRunning && (isPaused || waitingForUser);
+    instruction.classList.toggle('hidden', !showPauseMessage);
+    instruction.classList.toggle('manual-step', waitingForUser);
+    instruction.classList.toggle('temperature-wait', isPaused && waitingForTemperature);
+    instruction.classList.toggle('timer-paused', isPaused && !waitingForTemperature && !waitingForUser);
+
+    if (waitingForUser) {
+      instruction.textContent = 'Manual step. Press RESUME to continue.';
+    } else if (isPaused && waitingForTemperature) {
+      instruction.textContent = 'Heating paused. Press RESUME to continue.';
+    } else if (isPaused) {
+      instruction.textContent = 'Timer paused. Temperature control remains active.';
+    }
   }
   resumeButton.textContent = 'RESUME';
   
 	document.getElementById('btnStart').classList.toggle('hidden', isRunning || inCoolDown);
 	document.getElementById('btnPause').classList.toggle('hidden', !isRunning || isPaused || inCoolDown);
 	document.getElementById('btnResume').classList.toggle('hidden', !isRunning || !isPaused || inCoolDown);
-	document.getElementById('btnSkip').classList.toggle('hidden', !isRunning || inCoolDown);
+  document.getElementById('btnSkip').classList.toggle('hidden', !isRunning || inCoolDown || waitingForUser);
 	document.getElementById('btnStop').classList.toggle('hidden', !isRunning && !inCoolDown);
   
     document.querySelector('.profile-picker').classList.toggle('disabled', isRunning || inCoolDown);
@@ -351,8 +371,13 @@ async function update() {
       y: v
     }));
 
+    // Show the target line only while a step is being controlled
+    const showTarget = controllerStatus.running && !controllerStatus.coolDownActive;
+
     chart.data.datasets[0].data = points;
-    chart.data.datasets[1].data = points.map(p => ({ x: p.x, y: d.target }));
+    chart.data.datasets[1].data = showTarget
+      ? points.map(p => ({ x: p.x, y: d.target }))
+      : [];
 
     const windowSize = spacing * (d.temps.length - 1);
     chart.options.scales.x.min = now - windowSize;
@@ -363,7 +388,7 @@ async function update() {
     document.getElementById('curTemp').textContent =
       d.temps.length ? d.temps[d.temps.length - 1].toFixed(1) : '--';
 
-    document.getElementById('targetTemp').textContent = d.target.toFixed(1);
+    // targetTemp text is owned by updateStatus(); don't overwrite it here
     document.getElementById('statusDot').style.background = '#3ecf8e';
 
   } catch (e) {
@@ -448,7 +473,7 @@ function updateMainScreenProfileDetails(status) {
   const grainMass = profile?.grainMassKg ?? status?.grainMassKg;
   const w = waterMass !== undefined ? Number(waterMass).toFixed(1) : '--';
   const g = grainMass !== undefined ? Number(grainMass).toFixed(1) : '--';
-  detailsEl.textContent = `Water: ${w} kg | Grain: ${g} kg`;
+  detailsEl.textContent = `Water: ${w} l | Grain: ${g} kg`;
 }
 
 /* Render steps */
@@ -492,11 +517,21 @@ function renderSteps() {
 			<div>
 				<div class="label-small">
 					Time (min)
+          <button
+            type="button"
+            class="step-time-help"
+            aria-label="Manual step help">
+            <span aria-hidden="true">i</span>
+            <span class="step-time-tooltip">
+              Set time to 0 for a manual pause. The controller waits for the target temperature, then pauses until RESUME is pressed.
+            </span>
+          </button>
 				</div>
 
 				<input
 					type="number"
 					class="input-small"
+          min="0"
 					value="${step.time}"
 					onchange="updateStep(${idx}, 'time', this.value)">
 			</div>
@@ -542,7 +577,7 @@ function renderMainSteps() {
       <div class="step-info">
         <div class="step-values">
           <span class="step-temp">${step.temp}°C</span>
-          <span class="step-time">${step.time} min</span>
+          <span class="step-time">${step.time === 0 ? 'Manual' : `${step.time} min`}</span>
         </div>
       </div>
     `;

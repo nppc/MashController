@@ -334,7 +334,8 @@ static void handleStartProfile() {
   currentStep = 0;
   isRunning = true;
   isPaused = false;
-  grainPause = false;
+  waitingForUser = false;
+  inCoolDown = false;
 
   targetTemperature = activeProfile.steps[0].temp;
   heaterResetThermalModel(readTemperature(), activeProfile.waterMassKg);
@@ -356,7 +357,7 @@ static void handleStartProfile() {
 static void handleStopProfile() {
   isRunning = false;
   isPaused = false;
-  grainPause = false;
+  waitingForUser = false;
   waitingForTemp = false;
   targetTemperature = 20.0;
   heaterOn = false;
@@ -378,32 +379,48 @@ static void handlePauseProfile() {
     }
     isPaused = true;
 
-    // Mixer shouldn't keep running while the mash itself is paused.
-    mixerManualMode = true;
-    mixerOn = false;
+    if (waitingForTemp || waitingForUser) {
+      // Heating and automatic mixing are stopped before the timer starts.
+      mixerManualMode = true;
+      mixerOn = false;
+    } else {
+      // During a timed hold, pause only the timer and keep temperature
+      // control and automatic mixing active.
+      mixerManualMode = false;
+      mixerOn = false;
+      mixerPhaseStart = millis();
+    }
   }
   server.send(200, "text/plain", "Paused");
 }
 
 static void handleResumeProfile() {
   if (isRunning && isPaused) {
-    if (!waitingForTemp) {
-      stepStartTime = millis() - (pausedElapsedSec * 1000);
+    if (waitingForUser) {
+      if (currentStep == 0) {
+        heaterIncludeGrain(activeProfile.grainMassKg);
+      }
+      waitingForUser = false;
+      isPaused = false;
+      advanceStep();
+    } else {
+      if (!waitingForTemp) {
+        stepStartTime = millis() - (pausedElapsedSec * 1000);
+      }
+      isPaused = false;
     }
-    isPaused = false;
-    grainPause = false;
 
-    // Hand the mixer back to auto, starting a fresh rest phase rather
-    // than resuming wherever the cycle was before it got paused off.
-    mixerManualMode = false;
-    mixerOn = false;
-    mixerPhaseStart = millis();
+    if (isRunning) {
+      mixerManualMode = false;
+      mixerOn = false;
+      mixerPhaseStart = millis();
+    }
   }
   server.send(200, "text/plain", "Resumed");
 }
 
 static void handleSkipStep() {
-  if (isRunning) {
+  if (isRunning && !waitingForUser) {
     advanceStep();
   }
   server.send(200, "text/plain", "Skipped");
@@ -505,18 +522,21 @@ static void handleUpdateResult() {
 }
 
 static void handleStatus() {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<512> doc;
 
   doc["running"] = isRunning;
   doc["paused"] = isPaused;
-  doc["grainPause"] = grainPause;
+  doc["waitingForUser"] = waitingForUser;
   doc["profileName"] = activeProfile.name;
   doc["waterMassKg"] = activeProfile.waterMassKg;
   doc["grainMassKg"] = activeProfile.grainMassKg;
   doc["step"] = currentStep;
   doc["stepTemp"] = targetTemperature;
   doc["currentTemp"] = readTemperature();
-  doc["heaterOn"] = heaterOn;
+  const bool holdTemperatureWhilePaused =
+    isPaused && !waitingForTemp && !waitingForUser;
+  doc["heaterOn"] = heaterOn && isRunning && !inCoolDown &&
+                     (!isPaused || holdTemperatureWhilePaused);
 
   doc["mixerOn"] = mixerOn;
   doc["mixerMode"] = mixerManualMode ? "manual" : "auto";

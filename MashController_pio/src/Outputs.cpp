@@ -30,8 +30,12 @@ void outputsInit() {
 // iteration rather than at every place that sets those booleans, so the
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
+  const bool holdTemperatureWhilePaused =
+    isPaused && !waitingForTemp && !waitingForUser;
+
   digitalWrite(HEATER_PIN,
-           (heaterOn && isRunning && !inCoolDown) ||
+           (heaterOn && isRunning && !inCoolDown &&
+            (!isPaused || holdTemperatureWhilePaused)) ||
            (calibrationIsActive() && calibrationHeaterIsOn())
              ? HIGH
              : LOW);

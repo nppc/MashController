@@ -8,7 +8,7 @@ Profile activeProfile;
 
 bool isRunning = false;
 bool isPaused = false;
-bool grainPause = false;
+bool waitingForUser = false;
 int currentStep = 0;
 bool waitingForTemp = false;
 
@@ -54,17 +54,22 @@ void advanceStep() {
   currentStep++;
 
   if (currentStep >= activeProfile.stepCount) {
+    isRunning = true;
     heaterOn = false;           // Turn off heater immediately
     targetTemperature = 20.0;
-    grainPause = false;
+    waitingForUser = false;
+    waitingForTemp = false;
+    isPaused = false;
+    stepDurationSec = 0;
+    pausedElapsedSec = 0;
 
-    // Start cool-down: mixer runs in AUTO mode to circulate while cooling
+    // Start cool-down: mixer runs in AUTO mode to circulate while cooling.
+    // Keep this transition independent of how the final step was completed.
+    inCoolDown = true;
+    coolDownStart = millis();
     mixerManualMode = false;    // Switch to AUTO for cool-down circulation
     mixerOn = false;            // Will cycle on/rest per settings
     mixerPhaseStart = millis();
-
-    inCoolDown = true;          // Mark we're in cool-down phase
-    coolDownStart = millis();
 
     Serial.println("Profile finished, entering cool-down phase...");
   } else {
@@ -104,12 +109,11 @@ void mashProfileTick() {
   if (waitingForTemp) {
     if (currentTemp >= targetTemperature - 0.5) {   // tolerance
       waitingForTemp = false;
-      if (currentStep == 0) {
-        heaterIncludeGrain(activeProfile.grainMassKg);
+      if (activeProfile.steps[currentStep].time == 0) {
         isPaused = true;
-        grainPause = true;
+        waitingForUser = true;
         pausedElapsedSec = 0;
-        Serial.println("Initial temperature reached; waiting for grain addition");
+        Serial.println("Manual step temperature reached; waiting for user");
       } else {
         stepStartTime = millis();                   // NOW start timer
         Serial.println("Step timer started");

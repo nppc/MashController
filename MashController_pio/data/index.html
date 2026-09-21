@@ -59,7 +59,7 @@
 			<span class="remaining-time inactive" id="remainingTime">00:00</span>
 		  </div>
 		  <div class="pause-instruction hidden" id="pauseInstruction">
-			Add grain now. Temperature is being held at the target.
+			Press RESUME to continue.
 		  </div>
 		  <div class="btn-row">
 			<button class="btn green" id="btnStart" onclick="startSelectedProfile()">START</button>
@@ -150,9 +150,9 @@
 
 			<div class="profile-mass-grid">
 			  <div>
-				<div class="label-small">Water Mass (kg)</div>
+				<div class="label-small">Water volume (l)</div>
 				<input id="profileWaterMass" class="input-small" type="number"
-					   step="0.1" min="0.1" max="100"
+					   step="0.1" min="0" max="100"
 					   onchange="updateProfileMass('waterMassKg', this.value)">
 			  </div>
 			  <div>
