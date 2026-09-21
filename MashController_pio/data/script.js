@@ -709,6 +709,12 @@ async function deleteProfile() {
 function openProfilePicker() {
   if (controllerStatus.running) return;
 
+  const picker = document.getElementById('profilePickerOverlay');
+  if (!picker.classList.contains('hidden')) {
+    picker.classList.add('hidden');
+    return;
+  }
+
   const list = document.getElementById('profilePickerList');
   list.innerHTML = '';
 
@@ -720,13 +726,12 @@ function openProfilePicker() {
     list.appendChild(div);
   });
 
-  document.getElementById('profilePickerOverlay').classList.add('open');
+  picker.classList.remove('hidden');
 }
 
 function closeProfilePicker(e) {
-  // only close if clicking the dark overlay itself, not the sheet content
   if (e.target.id === 'profilePickerOverlay') {
-    document.getElementById('profilePickerOverlay').classList.remove('open');
+    e.currentTarget.classList.add('hidden');
   }
 }
 
@@ -737,8 +742,17 @@ function selectProfile(index) {
   const sel = document.getElementById('profileSelect');
   if (sel) sel.value = index;
 
-  document.getElementById('profilePickerOverlay').classList.remove('open');
+  document.getElementById('profilePickerOverlay').classList.add('hidden');
 }
+
+document.addEventListener('click', (e) => {
+  const pickerContainer = document.querySelector('.profile-picker-container');
+  const picker = document.getElementById('profilePickerOverlay');
+
+  if (picker && pickerContainer && !pickerContainer.contains(e.target)) {
+    picker.classList.add('hidden');
+  }
+});
 
 
 let settings = {};

@@ -34,13 +34,21 @@
 	<!-- MAIN SCREEN -->
 	<div id="main" class="screen active">
 
-		<div class="stat-card profile-picker" onclick="openProfilePicker()">
-		  <div class="label">Profile</div>
-		  <div class="value-row">
-			<div class="value" id="activeProfileName">--</div>
-			<span class="chevron">›</span>
-		  </div>
-		  <div class="label-small" style="margin-top: 4px;" id="activeProfileDetails">--</div>
+		<div class="profile-picker-container">
+			<div class="stat-card profile-picker" onclick="openProfilePicker()">
+			  <div class="label">Profile</div>
+			  <div class="value-row">
+				<div class="value" id="activeProfileName">--</div>
+				<span class="chevron">›</span>
+			  </div>
+			  <div class="label-small" style="margin-top: 4px;" id="activeProfileDetails">--</div>
+			</div>
+
+			<div id="profilePickerOverlay" class="profile-dropdown hidden" onclick="closeProfilePicker(event)">
+				<div class="profile-dropdown-content">
+					<div id="profilePickerList"></div>
+				</div>
+			</div>
 		</div>
 
 	  <div class="stats-row">
@@ -381,14 +389,6 @@
 
 </div><!-- /#app -->
 
-
-<!-- Profile picker modal -->
-<div id="profilePickerOverlay" class="modal-overlay" onclick="closeProfilePicker(event)">
-  <div class="modal-sheet">
-    <h2>Select Profile</h2>
-    <div id="profilePickerList"></div>
-  </div>
-</div>
 
 <div id="toastContainer"></div>
 
