@@ -64,13 +64,6 @@ async function updateStatus() {
         st.profileName;
     }
 
-    if (st.waterMassKg !== undefined) {
-      document.getElementById('curWaterMass').textContent = Number(st.waterMassKg).toFixed(1);
-    }
-    if (st.grainMassKg !== undefined) {
-      document.getElementById('curGrainMass').textContent = Number(st.grainMassKg).toFixed(1);
-    }
-
     const detailsEl = document.getElementById('activeProfileDetails');
     if (detailsEl) {
       const w = st.waterMassKg !== undefined ? Number(st.waterMassKg).toFixed(1) : '--';
