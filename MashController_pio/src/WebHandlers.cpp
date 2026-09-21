@@ -511,6 +511,8 @@ static void handleStatus() {
   doc["paused"] = isPaused;
   doc["grainPause"] = grainPause;
   doc["profileName"] = activeProfile.name;
+  doc["waterMassKg"] = activeProfile.waterMassKg;
+  doc["grainMassKg"] = activeProfile.grainMassKg;
   doc["step"] = currentStep;
   doc["stepTemp"] = targetTemperature;
   doc["currentTemp"] = readTemperature();

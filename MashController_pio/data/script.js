@@ -59,9 +59,24 @@ async function updateStatus() {
     document.getElementById('targetTemp').textContent =
       st.running ? Number(st.stepTemp).toFixed(1) : '--.-';
 
-    if (st.running && st.profileName)
+    if (st.running && st.profileName) {
       document.getElementById('activeProfileName').textContent =
         st.profileName;
+    }
+
+    if (st.waterMassKg !== undefined) {
+      document.getElementById('curWaterMass').textContent = Number(st.waterMassKg).toFixed(1);
+    }
+    if (st.grainMassKg !== undefined) {
+      document.getElementById('curGrainMass').textContent = Number(st.grainMassKg).toFixed(1);
+    }
+
+    const detailsEl = document.getElementById('activeProfileDetails');
+    if (detailsEl) {
+      const w = st.waterMassKg !== undefined ? Number(st.waterMassKg).toFixed(1) : '--';
+      const g = st.grainMassKg !== undefined ? Number(st.grainMassKg).toFixed(1) : '--';
+      detailsEl.textContent = `Water: ${w} kg | Grain: ${g} kg`;
+    }
 
 	renderMainSteps();
   } catch (e) {
