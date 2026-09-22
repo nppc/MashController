@@ -10,7 +10,7 @@ namespace {
 constexpr uint32_t MIXER_PWM_FREQUENCY_HZ = 500;
 constexpr uint32_t MIXER_PWM_RANGE = 1023;
 constexpr uint32_t MIXER_RAMP_TIME_MS = 500;
-constexpr uint32_t MIXER_START_DUTY = (MIXER_PWM_RANGE + 1) / 2;
+constexpr uint32_t MIXER_START_DUTY = (1023 - 256); //(MIXER_PWM_RANGE + 1) / 2;
 
 uint32_t mixerStartTime = 0;
 bool mixerWasOn = false;
