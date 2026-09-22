@@ -6,6 +6,7 @@
       --text: #e8ebf0;
       --text-dim: #8a92a6;
       --border: #232a3b;
+      --accent2-dim: #345c4a;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,7 +16,6 @@
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
-      padding: 0;
     }
 
 	@media (min-width: 600px) {
@@ -272,11 +272,6 @@
       aspect-ratio: 3.5 / 1;
     }
 
-	.profile-header {
-	  margin-bottom: 20px;
-	  padding-bottom: 12px;
-	  border-bottom: 1px solid var(--border);
-	}
 	
 	.input-dark {
 	  width: 100%;
@@ -325,7 +320,7 @@
 	}
 
 	.btn.green {
-	  background: #345c4a;        /* приглушённый зелёный */
+	  background: var(--accent2-dim);
 	}
 
 	.btn.green:hover {
@@ -333,7 +328,7 @@
 	}
 
 	.btn.gray {
-	  background: #232a3b;
+	  background: var(--border);
 	}
 
 	.btn.gray:hover {
@@ -363,7 +358,7 @@
 	}
 
 	.btn-trash {
-	  background: #232a3b;
+	  background: var(--border);
 	  border: none;
 	  width: 36px;
 	  height: 36px;
@@ -388,9 +383,6 @@
   margin-bottom: 16px;
   align-items: center;
 }
-.profile-select {
-  flex: 1;
-}
 .profile-add-btn {
   width: 52px;
 }
@@ -412,12 +404,12 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: #232a3b;
+  background: var(--border);
   color: var(--text-dim);
 }
 
 .state-badge.running {
-  background: #345c4a;
+  background: var(--accent2-dim);
   color: var(--accent2);
 }
 
@@ -474,14 +466,6 @@
 .btn-row .btn {
   flex: 1;
   min-width: 80px;
-}
-
-.btn.gray {
-  background: #232a3b;
-}
-
-.btn.gray:hover {
-  background: #2d3547;
 }
 
 .hidden {
@@ -579,11 +563,11 @@
 }
 
 .profile-option:hover {
-  background: #232a3b;
+  background: var(--border);
 }
 
 .profile-option.selected {
-  background: #345c4a;
+  background: var(--accent2-dim);
   color: var(--accent2);
 }
 
@@ -735,7 +719,7 @@
 .confirm-modal {
     width: min(420px, 90vw);
 
-    background: var(--panel);
+    background: var(--card);
     border: 1px solid var(--border);
     border-radius: 18px;
 
@@ -890,9 +874,12 @@
 
 .profile-header {
     margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
 }
 
 .profile-select {
+    flex: 1;
     height: 46px;
     font-weight: 600;
 }
@@ -990,7 +977,7 @@ button:disabled {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    background: #232a3b;
+    background: var(--border);
 }
 
 .heater-badge.on {
