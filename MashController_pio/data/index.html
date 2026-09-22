@@ -127,7 +127,22 @@
 			<div class="profile-header">
 				<div class="profile-select-row">
 
-				  <select id="profileSelect" class="input-dark profile-select"></select>
+					<select id="profileSelect" class="input-dark profile-select profile-select-source"></select>
+
+					<div class="profile-picker-container profile-editor-picker-container">
+						<div class="input-dark profile-picker-trigger" onclick="openProfilePicker('profileEditorPickerOverlay')">
+							<div class="value-row">
+								<div class="profile-picker-label" id="editorProfileName">--</div>
+								<span class="chevron">›</span>
+							</div>
+						</div>
+
+						<div id="profileEditorPickerOverlay" class="profile-dropdown hidden" onclick="closeProfilePicker(event)">
+							<div class="profile-dropdown-content">
+								<div id="profileEditorPickerList"></div>
+							</div>
+						</div>
+					</div>
 
 				  <button class="btn green profile-add-btn" onclick="addProfile()">
 					<span style="font-size:16px; line-height:0;">✚</span>

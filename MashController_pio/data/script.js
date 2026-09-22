@@ -431,6 +431,7 @@ async function loadProfiles() {
       updateMainScreenProfileName();
       updateMainScreenProfileDetails();
       renderSteps();
+      updateProfilePickerLabels();
     };
 
     // Load first profile
@@ -438,6 +439,7 @@ async function loadProfiles() {
     updateMainScreenProfileName();
     updateMainScreenProfileDetails();
     renderSteps();
+    updateProfilePickerLabels();
 
   } catch (e) {
     console.error('Profile load error', e);
@@ -592,6 +594,7 @@ function renderMainSteps() {
 function updateProfileName(name) {
   profiles[currentProfileIndex].name = name;
   updateMainScreenProfileName();
+  updateProfilePickerLabels();
 }
 
 function updateProfileMass(field, value) {
@@ -683,6 +686,7 @@ function addProfile() {
 
     updateProfileNameField();
     updateMainScreenProfileName();
+    updateProfilePickerLabels();
     renderSteps();
     updateProfileButtons();
 
@@ -745,19 +749,20 @@ async function deleteProfile() {
   updateProfileNameField();
   updateMainScreenProfileName();
   updateMainScreenProfileDetails();
+  updateProfilePickerLabels();
   renderSteps();
 }
 
-function openProfilePicker() {
-  if (controllerStatus.running) return;
+function openProfilePicker(overlayId = 'profilePickerOverlay') {
+  if (controllerStatus.running || controllerStatus.coolDownActive) return;
 
-  const picker = document.getElementById('profilePickerOverlay');
+  const picker = document.getElementById(overlayId);
   if (!picker.classList.contains('hidden')) {
     picker.classList.add('hidden');
     return;
   }
 
-  const list = document.getElementById('profilePickerList');
+  const list = picker.querySelector('[id$="PickerList"]');
   list.innerHTML = '';
 
   profiles.forEach((p, i) => {
@@ -772,7 +777,7 @@ function openProfilePicker() {
 }
 
 function closeProfilePicker(e) {
-  if (e.target.id === 'profilePickerOverlay') {
+  if (e.target === e.currentTarget) {
     e.currentTarget.classList.add('hidden');
   }
 }
@@ -787,16 +792,27 @@ function selectProfile(index) {
   const sel = document.getElementById('profileSelect');
   if (sel) sel.value = index;
 
-  document.getElementById('profilePickerOverlay').classList.add('hidden');
+  updateProfilePickerLabels();
+  document.querySelectorAll('.profile-dropdown').forEach(picker => {
+    picker.classList.add('hidden');
+  });
+}
+
+function updateProfilePickerLabels() {
+  const name = profiles[currentProfileIndex]?.name || '--';
+  const editorName = document.getElementById('editorProfileName');
+  if (editorName) editorName.textContent = name;
 }
 
 document.addEventListener('click', (e) => {
-  const pickerContainer = document.querySelector('.profile-picker-container');
-  const picker = document.getElementById('profilePickerOverlay');
+  const pickerContainers = document.querySelectorAll('.profile-picker-container');
+  const pickers = document.querySelectorAll('.profile-dropdown');
 
-  if (picker && pickerContainer && !pickerContainer.contains(e.target)) {
-    picker.classList.add('hidden');
-  }
+  pickerContainers.forEach((container, index) => {
+    if (pickers[index] && !container.contains(e.target)) {
+      pickers[index].classList.add('hidden');
+    }
+  });
 });
 
 
