@@ -137,6 +137,14 @@ function renderLiveMetrics(status, samples) {
     <div class="live-metric"><span>Model fit</span><strong>${fitText}</strong></div>`;
 }
 
+function renderMixerBadge(status) {
+  const mixer = document.getElementById('calibrationMixer');
+  if (!mixer) return;
+  mixer.textContent = status.mixerOn ? 'ON' : 'OFF';
+  mixer.classList.toggle('on', !!status.mixerOn);
+  mixer.classList.toggle('off', !status.mixerOn);
+}
+
 function renderCalibrationStatus(status) {
   lastCalibrationStatus = status;
   const elapsed = Number(status.elapsedSec || 0);
@@ -210,8 +218,14 @@ async function applyCalibrationValues(fit) {
 
 async function pollCalibration() {
   try {
-    const response = await fetch('calibrationStatus');
-    renderCalibrationStatus(await response.json());
+    const [calibrationResponse, mixerResponse] = await Promise.all([
+      fetch('calibrationStatus'),
+      fetch('status')
+    ]);
+    renderCalibrationStatus(await calibrationResponse.json());
+    if (mixerResponse.ok) {
+      renderMixerBadge(await mixerResponse.json());
+    }
     if (lastCalibrationStatus && !lastCalibrationStatus.active && calibrationPoll) {
       clearInterval(calibrationPoll);
       calibrationPoll = null;

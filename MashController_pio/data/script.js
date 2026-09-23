@@ -523,7 +523,7 @@ function renderSteps() {
 					Time (min)
           <button
             type="button"
-            class="step-time-help"
+            class="help-link step-time-help"
             aria-label="Manual step help">
             <span aria-hidden="true">i</span>
             <span class="step-time-tooltip">

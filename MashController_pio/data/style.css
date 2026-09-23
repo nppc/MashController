@@ -820,29 +820,9 @@
 
 .step-time-help {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  margin-left: 4px;
   padding: 0;
-  border: 1px solid var(--text-dim);
-  border-radius: 50%;
   background: transparent;
-  color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
   cursor: help;
-  vertical-align: middle;
-}
-
-.step-time-help:hover,
-.step-time-help:focus-visible {
-  border-color: var(--accent2);
-  color: var(--accent2);
-  outline: none;
 }
 
 .step-time-tooltip {
@@ -1050,16 +1030,6 @@ button:disabled {
   margin-bottom: 16px;
 }
 
-.calibration-page {
-  margin: 0 auto;
-  max-width: 640px;
-}
-
-.calibration-page h1 {
-  font-size: 24px;
-  margin: 8px 0 12px;
-}
-
 .calibration-page h2 {
   font-size: 16px;
   margin: 24px 0 6px;
@@ -1071,8 +1041,26 @@ button:disabled {
   line-height: 1.55;
 }
 
-.calibration-lead {
-  color: var(--text) !important;
+.calibration-page .calibration-lead {
+  color: var(--text);
+}
+
+.calibration-volume {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.calibration-volume span {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.calibration-volume input {
+  flex: 0 0 100px;
+  width: 100px;
 }
 
 .calibration-steps {
@@ -1110,33 +1098,6 @@ button:disabled {
   padding-left: 12px;
 }
 
-.calibration-back {
-  display: inline-block;
-  margin-top: 24px;
-  text-decoration: none;
-}
-
-.calibration-console {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  margin: 20px 0 28px;
-  padding: 14px;
-}
-
-.calibration-card {
-  border-top: 1px solid var(--border);
-  margin-top: 20px;
-  padding-top: 18px;
-}
-
-.section-kicker {
-  color: var(--accent2);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .calibration-console-header,
 .calibration-live-grid {
   align-items: center;
@@ -1172,11 +1133,6 @@ button:disabled {
 .calibration-live-grid strong {
   font-size: 18px;
   font-variant-numeric: tabular-nums;
-}
-
-.calibration-console-note {
-  font-size: 12px !important;
-  margin: 10px 0 14px;
 }
 
 .calibration-table {
