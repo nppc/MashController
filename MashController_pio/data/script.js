@@ -841,6 +841,12 @@ async function loadSettings() {
         document.getElementById('setHeaterAmbientC').value =
           settings.heaterAmbientC ?? 20;
 
+        document.getElementById('setHeaterDeadband').value =
+          Number(settings.heaterDeadband ?? 0.1).toFixed(1);
+
+        document.getElementById('setHeaterMinSwitchSec').value =
+          settings.heaterMinSwitchSec ?? 10;
+
         document.getElementById('setMixerOnSec').value =
             settings.mixerOnSec ?? 5;
 
@@ -953,6 +959,14 @@ async function saveSettings() {
               document.getElementById('setHeaterAmbientC').value
             ),
 
+            heaterDeadband: parseFloat(
+              document.getElementById('setHeaterDeadband').value
+            ),
+
+            heaterMinSwitchSec: parseInt(
+              document.getElementById('setHeaterMinSwitchSec').value
+            ),
+
             mixerOnSec: parseInt(
                 document.getElementById('setMixerOnSec').value
             ),
@@ -1040,6 +1054,27 @@ function showConfirm(message, title = "Confirm Action") {
         ok.addEventListener('click', okHandler);
         cancel.addEventListener('click', cancelHandler);
     });
+}
+
+function showHelpModal(title, message, imageSrc = '') {
+  const overlay = document.getElementById('helpOverlay');
+  const titleEl = document.getElementById('helpTitle');
+  const messageEl = document.getElementById('helpMessage');
+  const imageWrap = document.getElementById('helpImageWrap');
+  const imageEl = document.getElementById('helpImage');
+
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+
+  if (imageSrc) {
+    imageEl.src = imageSrc;
+    imageEl.alt = `${title} illustration`;
+    imageWrap.classList.remove('hidden');
+  } else {
+    imageWrap.classList.add('hidden');
+  }
+
+  overlay.classList.remove('hidden');
 }
 
 /* Load profiles and Settings on startup */
