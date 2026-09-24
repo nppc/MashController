@@ -31,7 +31,10 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeSideMenu();
+  if (e.key === 'Escape') {
+    closeSideMenu();
+    closeHelpModal();
+  }
 });
 
 /* CONTROLLER STATUS AND PROCESS */
@@ -1066,16 +1069,187 @@ function showHelpModal(title, message, imageSrc = '') {
   titleEl.textContent = title;
   messageEl.textContent = message;
 
+  const hintEl = document.getElementById('helpImageHint');
+  resetHelpZoom();
+
   if (imageSrc) {
     imageEl.src = imageSrc;
     imageEl.alt = `${title} illustration`;
     imageWrap.classList.remove('hidden');
+    hintEl.textContent = window.matchMedia('(hover: none)').matches
+      ? 'Pinch or double-tap to zoom'
+      : 'Scroll or double-click to zoom';
+    hintEl.classList.remove('hidden');
   } else {
     imageWrap.classList.add('hidden');
+    hintEl.classList.add('hidden');
   }
 
   overlay.classList.remove('hidden');
+  overlay.querySelector('.help-modal').scrollTop = 0;
 }
+
+function closeHelpModal() {
+  document.getElementById('helpOverlay').classList.add('hidden');
+  resetHelpZoom();
+}
+
+/* Pinch / double-tap / wheel zoom for the help image */
+const HELP_ZOOM_MAX = 4;
+const helpZoom = { s: 1, x: 0, y: 0 };
+
+function applyHelpZoom() {
+  const wrap = document.getElementById('helpImageWrap');
+  const img = document.getElementById('helpImage');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+
+  helpZoom.s = Math.min(HELP_ZOOM_MAX, Math.max(1, helpZoom.s));
+  helpZoom.x = Math.min(0, Math.max(w * (1 - helpZoom.s), helpZoom.x));
+  helpZoom.y = Math.min(0, Math.max(h * (1 - helpZoom.s), helpZoom.y));
+
+  img.style.transform = helpZoom.s === 1
+    ? ''
+    : `translate(${helpZoom.x}px, ${helpZoom.y}px) scale(${helpZoom.s})`;
+  wrap.classList.toggle('zoomed', helpZoom.s > 1);
+}
+
+function resetHelpZoom() {
+  helpZoom.s = 1;
+  helpZoom.x = 0;
+  helpZoom.y = 0;
+  applyHelpZoom();
+}
+
+/* Zoom to newS keeping the point (cx, cy) - in wrap coordinates - fixed */
+function helpZoomAt(cx, cy, newS) {
+  newS = Math.min(HELP_ZOOM_MAX, Math.max(1, newS));
+  const k = newS / helpZoom.s;
+  helpZoom.x = cx - (cx - helpZoom.x) * k;
+  helpZoom.y = cy - (cy - helpZoom.y) * k;
+  helpZoom.s = newS;
+  applyHelpZoom();
+}
+
+(function initHelpImageZoom() {
+  const wrap = document.getElementById('helpImageWrap');
+  if (!wrap) return;
+
+  const pos = (p) => {
+    const r = wrap.getBoundingClientRect();
+    return { x: p.clientX - r.left, y: p.clientY - r.top };
+  };
+
+  const toggleZoomAt = (p) => {
+    if (helpZoom.s > 1) resetHelpZoom();
+    else helpZoomAt(p.x, p.y, 2.5);
+  };
+
+  let pinch = null;   // active two-finger gesture
+  let pan = null;     // active one-finger gesture
+  let lastTap = 0;
+
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const a = pos(e.touches[0]);
+      const b = pos(e.touches[1]);
+      pinch = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        s: helpZoom.s, x: helpZoom.x, y: helpZoom.y,
+        mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2
+      };
+      pan = null;
+    } else if (e.touches.length === 1) {
+      const p = pos(e.touches[0]);
+      pinch = null;
+      pan = { x: p.x, y: p.y, total: 0 };
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchmove', (e) => {
+    if (pinch && e.touches.length === 2) {
+      const a = pos(e.touches[0]);
+      const b = pos(e.touches[1]);
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const s = Math.min(HELP_ZOOM_MAX, Math.max(1, pinch.s * dist / pinch.dist));
+
+      // keep the image point that started under the fingers under them
+      helpZoom.s = s;
+      helpZoom.x = mx - (pinch.mx - pinch.x) * (s / pinch.s);
+      helpZoom.y = my - (pinch.my - pinch.y) * (s / pinch.s);
+      applyHelpZoom();
+      e.preventDefault();
+    } else if (pan && e.touches.length === 1) {
+      const p = pos(e.touches[0]);
+      const dx = p.x - pan.x;
+      const dy = p.y - pan.y;
+      pan.total += Math.abs(dx) + Math.abs(dy);
+      pan.x = p.x;
+      pan.y = p.y;
+      if (helpZoom.s > 1) {
+        helpZoom.x += dx;
+        helpZoom.y += dy;
+        applyHelpZoom();
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
+      if (helpZoom.s < 1.05) resetHelpZoom();
+
+      // double-tap: a short touch with almost no movement, twice in a row
+      if (pan && pan.total < 10) {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          toggleZoomAt(pan);
+          lastTap = 0;
+          if (e.cancelable) e.preventDefault();   // suppress the synthetic dblclick
+        } else {
+          lastTap = now;
+        }
+      }
+      pinch = null;
+      pan = null;
+    } else if (e.touches.length === 1) {
+      // one finger left after a pinch: continue as a pan, never as a tap
+      const p = pos(e.touches[0]);
+      pinch = null;
+      pan = { x: p.x, y: p.y, total: 999 };
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchcancel', () => { pinch = null; pan = null; });
+
+  /* Desktop: wheel / trackpad-pinch zoom, drag to pan, double-click toggle */
+  wrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const p = pos(e);
+    helpZoomAt(p.x, p.y, helpZoom.s * Math.exp(-e.deltaY * 0.002));
+  }, { passive: false });
+
+  let drag = null;
+  wrap.addEventListener('mousedown', (e) => {
+    if (helpZoom.s > 1) {
+      drag = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!drag) return;
+    helpZoom.x += e.clientX - drag.x;
+    helpZoom.y += e.clientY - drag.y;
+    drag = { x: e.clientX, y: e.clientY };
+    applyHelpZoom();
+  });
+  window.addEventListener('mouseup', () => { drag = null; });
+  wrap.addEventListener('dblclick', (e) => toggleZoomAt(pos(e)));
+
+  window.addEventListener('orientationchange', resetHelpZoom);
+})();
 
 /* Load profiles and Settings on startup */
 loadProfiles();

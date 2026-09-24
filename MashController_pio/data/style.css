@@ -740,25 +740,74 @@
 }
 
 .help-modal {
-    width: min(560px, 90vw);
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.help-modal p {
+    margin-bottom: 0;
+    font-size: 14px;
+    line-height: 1.5;
 }
 
 .help-image-wrap {
-    margin-top: 16px;
+    margin-top: 14px;
     border-radius: 10px;
     overflow: hidden;
     background: rgba(255,255,255,0.02);
     border: 1px solid rgba(255,255,255,0.08);
 }
 
+.help-image-wrap {
+    touch-action: pan-y;            /* one finger still scrolls the modal */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.help-image-wrap.zoomed {
+    touch-action: none;             /* zoomed: one finger pans the image */
+    cursor: grab;
+}
+
 .help-image-wrap img {
     display: block;
     width: 100%;
+    max-width: 100%;
     height: auto;
+    transform-origin: 0 0;
+    will-change: transform;
+    -webkit-user-drag: none;
+}
+
+.help-image-hint {
+    margin-top: 6px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
 }
 
 .help-image-wrap.hidden {
     display: none;
+}
+
+.help-close {
+    width: 100%;
+    margin-top: 16px;
+}
+
+@media (max-width: 480px) {
+    .help-modal {
+        padding: 18px 16px;
+        border-radius: 14px;
+    }
+
+    .help-modal h3 {
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+    }
 }
 
 .confirm-actions {
@@ -1036,6 +1085,23 @@ button:disabled {
   line-height: 1;
   text-decoration: none;
   vertical-align: middle;
+
+  /* <button> resets so it matches the <a> variants */
+  position: relative;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Larger invisible touch target (15px circle is tiny on a phone) */
+.help-link::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
 }
 
 .help-link:hover,

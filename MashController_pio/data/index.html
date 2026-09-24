@@ -270,7 +270,7 @@
 						onclick="showHelpModal('Heater Deadband', 'Predictive peak is the estimated highest temperature the mash will reach based on the current stored heat in the element and pot. Deadband is the safety margin below target before the heater restarts. This helps prevent short cycling while the thermal mass is still carrying heat.', 'PredictivePeakDeadband.png')">?</button>
 			  </div>
 			  <div class="setting-desc">
-				When the predicted peak falls below target by this much, the heater turns back on.
+				When the predicted peak falls below target temperature by this much, the heater turns back on.
 			  </div>
 			</div>
 			<input id="setHeaterDeadband" class="input-small" type="number"
@@ -447,13 +447,15 @@
     </div>
 </div>
 
-<div id="helpOverlay" class="confirm-overlay hidden" onclick="if (event.target === this) this.classList.add('hidden');">
-    <div class="confirm-modal help-modal">
+<div id="helpOverlay" class="confirm-overlay hidden" onclick="if (event.target === this) closeHelpModal();">
+    <div class="confirm-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <h3 id="helpTitle">Help</h3>
         <p id="helpMessage"></p>
         <div id="helpImageWrap" class="help-image-wrap hidden">
             <img id="helpImage" src="" alt="Help illustration" />
         </div>
+        <div id="helpImageHint" class="help-image-hint hidden"></div>
+        <button type="button" class="btn gray help-close" onclick="closeHelpModal()">Close</button>
     </div>
 </div>
 
