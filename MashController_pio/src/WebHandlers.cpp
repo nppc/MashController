@@ -13,6 +13,8 @@
 #include "MashProfile.h"
 #include "Outputs.h"
 
+static double round1(double v) { return round(v * 10.0) / 10.0; }
+
 ESP8266WebServer server(80);
 bool otaEnabled = false;
 
@@ -49,11 +51,15 @@ static void handleFileRead(String path) {
 
   if (LittleFS.exists(path)) {
     File file = LittleFS.open(path, "r");
-    if (path == "/ota.html") {
-      server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-      server.sendHeader("Pragma", "no-cache");
-    }
-    server.streamFile(file, contentType);
+  if (path == "/ota.html") {
+    server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    server.sendHeader("Pragma", "no-cache");
+  } else if (path == "/chart.js" || path.endsWith(".png")) {
+    server.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
+  } else if (path == "/style.css" || path == "/script.js" || path == "/calibration.js") {
+    server.sendHeader("Cache-Control", "public, max-age=3600");
+  }
+  server.streamFile(file, contentType);
     file.close();
     return;
   }
@@ -68,7 +74,7 @@ static void handleFileRead(String path) {
 static void handleGetProfiles() {
   // Current storage allows up to 15 profiles x 6 steps each; keep a margin above
   // the worst-case serialized payload for names, floats, and nested arrays.
-  StaticJsonDocument<4096> doc;
+  DynamicJsonDocument doc(4096);
   JsonArray arr = doc.createNestedArray("profiles");
 
   for (uint8_t i = 0; i < storage.profileCount(); i++) {
@@ -78,12 +84,12 @@ static void handleGetProfiles() {
     JsonObject o = arr.createNestedObject();
     o["name"] = p.name;
     o["waterMassKg"] = p.waterMassKg;
-    o["grainMassKg"] = p.grainMassKg;
+    o["grainMassKg"] = round1(p.grainMassKg);
 
     JsonArray steps = o.createNestedArray("steps");
     for (uint8_t s = 0; s < p.stepCount; s++) {
       JsonObject st = steps.createNestedObject();
-      st["temp"] = p.steps[s].temp;
+      st["temp"] = round1(p.steps[s].temp);
       st["time"] = p.steps[s].timeMin;
     }
   }
@@ -102,7 +108,7 @@ static void handleSaveProfiles() {
     return;
   }
 
-  StaticJsonDocument<4096> doc;
+  DynamicJsonDocument doc(4096);
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
     server.send(400, "text/plain", "JSON parse error");
@@ -545,11 +551,11 @@ static void handleStatus() {
   doc["waterMassKg"] = activeProfile.waterMassKg;
   doc["grainMassKg"] = activeProfile.grainMassKg;
   doc["step"] = currentStep;
-  doc["stepTemp"] = targetTemperature;
-  doc["currentTemp"] = readTemperature();
+  doc["stepTemp"] = round1(targetTemperature);
+  doc["currentTemp"] = round1(readTemperature());
   doc["heaterOn"] = heaterOutputActive();
   const float predictedPeak = heaterPredictedPeak();
-  if (isfinite(predictedPeak)) doc["predictedPeak"] = predictedPeak;
+  if (isfinite(predictedPeak)) doc["predictedPeak"] = round1(predictedPeak);
 
   doc["mixerOn"] = mixerOn;
   doc["mixerMode"] = mixerManualMode ? "manual" : "auto";
@@ -607,6 +613,7 @@ void webHandlersInit() {
   server.on("/ota.html", []() { handleFileRead("/ota.html"); });
   server.on("/calibration.html", []() { handleFileRead("/calibration.html"); });
   server.on("/calibration.js", []() { handleFileRead("/calibration.js"); });
+  server.on("/PredictivePeakDeadband.png", []() { handleFileRead("/PredictivePeakDeadband.png"); });
   server.on("/enable-ota", HTTP_GET, handleEnableOta);
   server.on("/update", HTTP_POST, handleUpdateResult, handleUpdateUpload);
 
