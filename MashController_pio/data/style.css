@@ -210,7 +210,7 @@
     /* Screens */
     .screen {
       display: none;
-      padding: 16px;
+      padding: 6px;
     }
 
     .screen.active {
