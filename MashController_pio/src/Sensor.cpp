@@ -1,5 +1,6 @@
 #include "Sensor.h"
-#include "Heater.h"   // fakeReadTemperature() reads heaterOn / calls updateHeater()
+#include "Heater.h"    // updateHeater() runs on every new reading
+#include "Outputs.h"   // fakeReadTemperature() follows the real heater output
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -86,6 +87,20 @@ float readTemperature() {
   return total / available;
 }
 
+float averageTemperature(float windowSec) {
+  int count = (int)lroundf(windowSec * 1000.0f / (float)READ_INTERVAL_MS);
+  count = constrain(count, 1, HISTORY_SIZE);
+  const int available = min(histIndex, count);
+  if (available <= 0) return lastGoodTemp;
+
+  float total = 0.0f;
+  const int first = histIndex - available;
+  for (int i = 0; i < available; i++) {
+    total += tempHistory[(first + i) % HISTORY_SIZE];
+  }
+  return total / available;
+}
+
 void sensorInit() {
 #ifdef DEBUG_FAKE_TEMP
   Serial.println("DEBUG_FAKE_TEMP active - using simulated temperature, no DS18B20 required");
@@ -110,79 +125,38 @@ void sensorInit() {
 /* -------------------------------------------------------------------------- */
 
 #ifdef DEBUG_FAKE_TEMP
+// Simulated 20 L pot on a 2 kW under-base element. The element and pot base
+// store heat and pass it on to the water, so the temperature keeps rising
+// after switch-off, just like the real hardware. Starts at 15 C so the
+// calibration test can be run against it.
 static float fakeReadTemperature() {
-  float last = (histIndex > 0)
-               ? tempHistory[(histIndex - 1) % HISTORY_SIZE]
-               : 20.0f;
+  constexpr float POWER_W = 1900.0f;
+  constexpr float TRANSFER_W_PER_C = 30.0f;
+  constexpr float ELEMENT_J_PER_C = 2500.0f;   // tau = 2500 / 30 = 83 s
+  constexpr float WATER_J_PER_C = 20.0f * 4186.0f;
+  constexpr float LOSS_W_PER_C = 5.0f;
+  constexpr float AMBIENT_C = 20.0f;
+  constexpr float SENSOR_TAU_SEC = 10.0f;
+  constexpr int SUBSTEPS = 4;
 
-  updateHeater(last);
+  static float elementTemp = 15.0f;
+  static float waterTemp = 15.0f;
+  static float sensorTemp = 15.0f;
 
-  const float dt = (float)READ_INTERVAL_MS / 1000.0f;
+  const float dt = (float)READ_INTERVAL_MS / 1000.0f / SUBSTEPS;
+  const float power = heaterOutputActive() ? POWER_W : 0.0f;
 
-  /* Physical parameters */
-  const float heatingRate = 0.35f;  /* °C/s at full power */
-  const float coolingRate = 0.20f;  /* °C/s */
-  const float heatLoss = 0.10f;     /* stored heat lost per update */
-
-  static float waterTemp = 20.0f;
-  static float storedHeat = 0.0f;
-
-  float heatInput;
-
-  /* Heater startup ramp */
-  static int heaterRamp = 0;
-
-  if (heaterOn) {
-    if (heaterRamp < 3)
-      heaterRamp++;
-  } else {
-    heaterRamp = 0;
+  for (int i = 0; i < SUBSTEPS; i++) {
+    const float toWater = TRANSFER_W_PER_C * (elementTemp - waterTemp);
+    const float loss = LOSS_W_PER_C * (waterTemp - AMBIENT_C);
+    elementTemp += (power - toWater) * dt / ELEMENT_J_PER_C;
+    waterTemp += (toWater - loss) * dt / WATER_J_PER_C;
+    sensorTemp += (waterTemp - sensorTemp) * dt / SENSOR_TAU_SEC;
   }
 
-  /*
-   * Add energy while heater is ON.
-   */
-  if (heaterOn) {
-    float rampFactor = 0.4f + 0.2f * heaterRamp;
-    heatInput = heatingRate * rampFactor * dt;
-    storedHeat += heatInput;
-  }
-
-  /*
-   * Stored heat is released gradually.
-   *
-   * This is what creates thermal inertia:
-   * the heater can switch OFF while storedHeat
-   * is still positive, so the water keeps warming.
-   */
-  if (storedHeat > 0.0f) {
-    float released = storedHeat * heatLoss;
-
-    /* Don't release more heat than is stored */
-    if (released > storedHeat)
-      released = storedHeat;
-
-    storedHeat -= released;
-    waterTemp += released;
-  }
-
-  /*
-   * Natural cooling.
-   */
-  if (waterTemp > 20.0f) {
-    waterTemp -= coolingRate * dt;
-
-    if (waterTemp < 20.0f)
-      waterTemp = 20.0f;
-  }
-
-  /* Small measurement noise */
-  waterTemp += ((float)random(-5, 6)) / 100.0f;
-
-  /* Round to 0.1 °C */
-  waterTemp = roundf(waterTemp * 10.0f) / 10.0f;
-
-  return waterTemp;
+  // DS18B20: small noise, 12-bit (1/16 C) resolution.
+  const float noisy = sensorTemp + (float)random(-3, 4) / 100.0f;
+  return roundf(noisy * 16.0f) / 16.0f;
 }
 #endif // DEBUG_FAKE_TEMP
 
@@ -201,6 +175,7 @@ void sensorUpdate() {
   sensorOk = true;
   lastGoodTemp = t;
   addTemp(t);
+  updateHeater();
 #else
   if (!sensorFound) return;
 
@@ -226,7 +201,7 @@ void sensorUpdate() {
       sensorOk = true;
       lastGoodTemp = t;
       addTemp(lastGoodTemp);
-      updateHeater(readTemperature());
+      updateHeater();
     }
 
     conversionInProgress = false;   // next call starts a fresh conversion

@@ -200,45 +200,66 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Heat Transfer Coefficient <a class="help-link" href="calibration.html">?</a></div>
-			  <div class="setting-desc">
-				Calibrated hardware value k, in watts per °C.
-			  </div>
-			</div>
-
-			<input
-			  id="setHeaterTransferCoeff"
-			  class="input-small"
-			  type="number"
-			  step="0.1"
-			  min="0.1"
-			  max="200">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
-			  <div class="setting-title">Element Thermal Mass <a class="help-link" href="calibration.html">?</a></div>
-			  <div class="setting-desc">
-				Calibrated hardware value C_e, in joules per °C.
-			  </div>
-			</div>
-
-			<input
-			  id="setHeaterThermalMass"
-			  class="input-small"
-			  type="number"
-			  step="10"
-			  min="1"
-			  max="50000">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
 			  <div class="setting-title">Heater Power</div>
-			  <div class="setting-desc">Installed heater power in watts.</div>
+			  <div class="setting-desc">Rated heater power in watts.</div>
 			</div>
 			<input id="setHeaterPowerW" class="input-small" type="number"
 				   step="10" min="1" max="10000">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Effective Power <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-desc">
+				Calibrated power that reaches the water, in watts.
+			  </div>
+			</div>
+			<input id="setHeaterPowerEffW" class="input-small" type="number"
+				   step="10" min="1" max="10000">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Time Constant <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-desc">
+				Calibrated τ: how fast stored heat reaches the water, in seconds.
+			  </div>
+			</div>
+			<input id="setHeaterTauSec" class="input-small" type="number"
+				   step="1" min="5" max="1200">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Store Gain <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-desc">
+				Calibrated overshoot scale, usually a little above 1.
+			  </div>
+			</div>
+			<input id="setHeaterStoreGain" class="input-small" type="number"
+				   step="0.01" min="0.2" max="5">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Heat Loss <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-desc">
+				Calibrated loss in watts per °C above room temperature.
+			  </div>
+			</div>
+			<input id="setHeaterLossWPerC" class="input-small" type="number"
+				   step="0.1" min="0" max="100">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Room Temperature</div>
+			  <div class="setting-desc">
+				Used with Heat Loss. Update it if the brewing room is much warmer or colder.
+			  </div>
+			</div>
+			<input id="setHeaterAmbientC" class="input-small" type="number"
+				   step="0.5" min="-10" max="45">
 		  </div>
 
 		</div>

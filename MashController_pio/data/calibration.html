@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Heater Calibration | Mash Controller</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .cal-chart { width: 100%; height: auto; display: block; margin: 12px 0; }
+    .cal-chart text { font-size: 11px; fill: currentColor; opacity: 0.7; }
+    .cal-chart .axis { stroke: currentColor; opacity: 0.3; }
+    .cal-chart .target { stroke: currentColor; opacity: 0.4; stroke-dasharray: 4 4; }
+    .cal-chart .off { stroke: #d9534f; opacity: 0.6; stroke-dasharray: 2 3; }
+    .cal-chart .data { fill: none; stroke: #e0703a; stroke-width: 2; }
+    .cal-chart .fit { fill: none; stroke: #3a8ee0; stroke-width: 2; stroke-dasharray: 6 3; }
+    .calibration-notes { margin: 10px 0; padding-left: 18px; }
+    .calibration-inputs { display: grid; gap: 8px; margin: 12px 0; }
+  </style>
   <script src="calibration.js" defer></script>
 </head>
 <body>
@@ -17,41 +28,49 @@
     <main class="screen active calibration-page">
 
       <section class="stat-card">
-        <div class="label">About These Values</div>
+        <div class="label">What Is Measured</div>
 
         <p class="calibration-lead">
-          Calibrate these three hardware values once. They describe the heater and
-          element, not a particular brew profile.
+          The element and pot base store heat while the heater is on. After switch-off
+          that heat keeps flowing into the water, so the temperature keeps rising.
+          A short pulse stores little heat; a long heat stores the most. The controller
+          tracks this stored heat and switches off early by the right amount.
         </p>
 
-        <h2>Heater Power</h2>
+        <h2>Time Constant (τ)</h2>
         <p>
-          Enter the actual electrical heater power in watts. Use the rated power
-          of the element, or measure it at the operating voltage.
+          How quickly stored heat reaches the sensor, in seconds. It combines the element,
+          the pot base, mixing and the sensor itself. After a long heat the stored energy is
+          about effective power × τ.
         </p>
 
-        <h2>Heat Transfer Coefficient (k)</h2>
+        <h2>Effective Power</h2>
         <p>
-          This describes how quickly heat moves from the element into the water,
-          in watts per degree Celsius. Use plain water and the same mixer and
-          hardware arrangement used during brewing.
+          The power that actually reaches the water, measured from the heating rate.
+          It is usually a little below the rated power.
         </p>
 
-        <h2>Element Thermal Mass (C_e)</h2>
+        <h2>Store Gain</h2>
         <p>
-          This describes how much heat the element can store per degree Celsius,
-          in joules per degree Celsius. It is estimated together with k from
-          heating behavior and should remain stable for the same hardware.
+          The measured overshoot divided by effective power × τ. It is usually a little
+          above 1, because sensor lag and mixing make the overshoot look larger than the
+          element's stored heat alone. The controller scales its prediction by it.
+        </p>
+
+        <h2>Heat Loss</h2>
+        <p>
+          How fast the pot loses heat to the room, in watts per °C above room temperature.
+          This is what the heater has to make up during a rest.
         </p>
       </section>
 
       <section class="stat-card">
         <div class="label">Prepare the Test</div>
         <ol class="calibration-steps">
-          <li>Add the selected volume of plain water to the bowl.</li>
-          <li>Put the sensor in the mixed water, away from the heater, and start the mixer.</li>
-          <li>In Settings, enter the heater's measured or rated <strong>Heater Power</strong>. The calibration page reads that value automatically.</li>
-          <li>Keep the same vessel, sensor position, mixer speed, and heater voltage used for brewing.</li>
+          <li>Fill the pot with the volume of plain water you normally mash with, at least 15 °C below the target. Cold tap water is best.</li>
+          <li>Keep the sensor, lid, mixer and mixer cycle exactly as during brewing. The mixer runs its normal cycle during the test.</li>
+          <li>In Settings, enter the heater's rated <strong>Heater Power</strong> so the page can compare it with the measured value.</li>
+          <li>Set the target to your usual rest temperature. For 20 L the test takes roughly 45-75 minutes.</li>
         </ol>
       </section>
 
@@ -68,10 +87,20 @@
           </div>
         </div>
 
-        <label class="calibration-volume">
-          <span>Water volume (litres)</span>
-          <input id="calibrationWaterLiters" class="input-small" type="number" min="0.1" max="100" step="0.1" value="10">
-        </label>
+        <div class="calibration-inputs">
+          <label class="calibration-volume">
+            <span>Water volume (litres)</span>
+            <input id="calibrationWaterLiters" class="input-small" type="number" min="0.1" max="100" step="0.1" value="20">
+          </label>
+          <label class="calibration-volume">
+            <span>Target temperature (°C)</span>
+            <input id="calibrationTargetC" class="input-small" type="number" min="40" max="80" step="0.5" value="65">
+          </label>
+          <label class="calibration-volume">
+            <span>Room temperature (°C)</span>
+            <input id="calibrationAmbientC" class="input-small" type="number" min="-10" max="45" step="0.5" value="20">
+          </label>
+        </div>
 
         <div class="calibration-live-grid">
           <div><span>Temperature</span><strong id="calibrationTemp">--.- °C</strong></div>
@@ -90,36 +119,41 @@
           </div>
         </div>
 
-        <div class="calibration-live-metrics" id="calibrationLiveMetrics">
-          <div class="live-metric"><span>Recent rate</span><strong>--</strong></div>
-          <div class="live-metric"><span>Average heating rate</span><strong>--</strong></div>
-          <div class="live-metric"><span>Water power</span><strong>--</strong></div>
-          <div class="live-metric"><span>Model fit</span><strong>--</strong></div>
-        </div>
+        <div class="calibration-live-metrics" id="calibrationLiveMetrics"></div>
 
-        <table class="calibration-table">
-          <thead><tr><th>Time</th><th>Phase</th><th>Temperature</th></tr></thead>
-          <tbody id="calibrationSamples"></tbody>
-        </table>
+        <div id="calibrationChart"></div>
 
         <div class="calibration-result hidden" id="calibrationResult"></div>
+
+        <details>
+          <summary>Logged readings (<span id="calibrationSampleCount">0</span>)</summary>
+          <table class="calibration-table">
+            <thead><tr><th>Time</th><th>Phase</th><th>Temperature</th></tr></thead>
+            <tbody id="calibrationSamples"></tbody>
+          </table>
+        </details>
       </section>
 
       <section class="stat-card">
         <div class="label">How the Result Is Calculated</div>
-        <p>The device logs temperature every minute. The page uses every logged value to simulate the two thermal masses and searches for the `k` and `C_e` pair with the smallest curve error.</p>
+        <p>
+          The sensor is read every 2 seconds and the readings are averaged over each
+          full mixer cycle (mixing plus rest), which cancels the ripple the mixer causes.
+          The controller averages the same way during brewing.
+          The heater runs at full power until the target is reached, then switches off.
+          Logging continues until the peak has passed and the water has started to cool.
+        </p>
         <div class="formula-block">
-          <div><strong>C_w</strong> = water volume × 4186 J/(kg·°C)</div>
-          <div><strong>Q_water</strong> = C_w × (T_heat-end − T0)</div>
-          <div><strong>P_water</strong> = Q_water / heating time</div>
-          <div><strong>τ_element</strong> = C_e / k</div>
-          <div><strong>Fit error</strong> = sum(model temperature − logged temperature)²</div>
+          <div><strong>Coast fit</strong>: T(t) = T_off + ΔT·(1 − e<sup>−t/τ</sup>) − r·t</div>
+          <div><strong>C_w</strong> = water volume × 4186 J/°C</div>
+          <div><strong>Heat loss</strong> = r × C_w / (T_water − T_room)</div>
+          <div><strong>Effective power</strong> = C_w × heating rate + heat loss</div>
+          <div><strong>Store gain</strong> = ΔT × C_w / (effective power × τ)</div>
         </div>
         <p class="calibration-note">
-          The test stops at 50 °C and after a 2 °C measured cooldown drop. It does not
-          wait for the water to reach ambient temperature. Do not add grain during
-          calibration, use the same heater power and mixer arrangement as the real
-          brew, and never leave the heater running unattended.
+          The page warns when the result is uncertain, for example when the heating was too
+          short, the peak had not clearly passed, or the two power estimates disagree.
+          Do not add grain during calibration and never leave the heater running unattended.
         </p>
       </section>
 

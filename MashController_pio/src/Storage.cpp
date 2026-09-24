@@ -149,6 +149,39 @@ struct LegacyAsymmetricEepromDataEE {
   ProfileEE                profiles[STORAGE_MAX_PROFILES];
   uint32_t                 crc;
 };
+
+struct LegacyV11SettingsEE {
+  char     wifiSSID[STORAGE_SSID_LEN];
+  char     wifiPass[STORAGE_PASS_LEN];
+  float    heaterTransferCoeff;
+  float    heaterThermalMass;
+  float    heaterPowerW;
+  float    heaterDeadband;
+  uint16_t heaterMinSwitchSec;
+  uint8_t  mixerRestSec;
+  uint8_t  mixerOnSec;
+  uint16_t coolDownSec;
+};
+
+struct LegacyV11EepromDataEE {
+  uint32_t             magic;
+  uint16_t             version;
+  LegacyV11SettingsEE  settings;
+  uint8_t              profileCount;
+  ProfileEE            profiles[STORAGE_MAX_PROFILES];
+  uint32_t             crc;
+};
+
+// Uncalibrated starting point for a 2 kW under-base element; run the
+// Heater Calibration page to replace these with measured values.
+void applyHeaterDefaults(SettingsEE &s) {
+  s.heaterPowerW = 2000.0f;
+  s.heaterPowerEffW = 1900.0f;
+  s.heaterTauSec = 90.0f;
+  s.heaterStoreGain = 1.2f;
+  s.heaterLossWPerC = 5.0f;
+  s.heaterAmbientC = 20.0f;
+}
 }
 
 bool Storage::begin() {
@@ -174,9 +207,7 @@ bool Storage::begin() {
               STORAGE_SSID_LEN - 1);
       strncpy(_data.settings.wifiPass, legacy.settings.wifiPass,
               STORAGE_PASS_LEN - 1);
-      _data.settings.heaterTransferCoeff = 20.0f;
-      _data.settings.heaterThermalMass = 5000.0f;
-      _data.settings.heaterPowerW = 2000.0f;
+      applyHeaterDefaults(_data.settings);
       _data.settings.heaterDeadband = 0.1f;
       _data.settings.heaterMinSwitchSec = 10;
       _data.settings.mixerRestSec = legacy.settings.mixerRestSec;
@@ -208,9 +239,7 @@ bool Storage::begin() {
               STORAGE_SSID_LEN - 1);
       strncpy(_data.settings.wifiPass, legacySplit.settings.wifiPass,
               STORAGE_PASS_LEN - 1);
-      _data.settings.heaterTransferCoeff = 20.0f;
-      _data.settings.heaterThermalMass = 5000.0f;
-      _data.settings.heaterPowerW = 2000.0f;
+      applyHeaterDefaults(_data.settings);
       _data.settings.heaterDeadband = 0.1f;
       _data.settings.heaterMinSwitchSec = 10;
       _data.settings.mixerRestSec = legacySplit.settings.mixerRestSec;
@@ -242,9 +271,7 @@ bool Storage::begin() {
               STORAGE_SSID_LEN - 1);
       strncpy(_data.settings.wifiPass, legacyMargin.settings.wifiPass,
               STORAGE_PASS_LEN - 1);
-      _data.settings.heaterTransferCoeff = 20.0f;
-      _data.settings.heaterThermalMass = 5000.0f;
-      _data.settings.heaterPowerW = 2000.0f;
+      applyHeaterDefaults(_data.settings);
       _data.settings.heaterDeadband = 0.1f;
       _data.settings.heaterMinSwitchSec = 10;
       _data.settings.mixerRestSec = legacyMargin.settings.mixerRestSec;
@@ -277,9 +304,7 @@ bool Storage::begin() {
             STORAGE_SSID_LEN - 1);
         strncpy(_data.settings.wifiPass, legacyPredictive.settings.wifiPass,
             STORAGE_PASS_LEN - 1);
-          _data.settings.heaterTransferCoeff = 20.0f;
-          _data.settings.heaterThermalMass = 5000.0f;
-          _data.settings.heaterPowerW = 2000.0f;
+          applyHeaterDefaults(_data.settings);
         _data.settings.heaterDeadband = legacyPredictive.settings.heaterDeadband;
         _data.settings.heaterMinSwitchSec =
           legacyPredictive.settings.heaterMinSwitchSec;
@@ -313,9 +338,7 @@ bool Storage::begin() {
                 STORAGE_SSID_LEN - 1);
         strncpy(_data.settings.wifiPass, legacyAsymmetric.settings.wifiPass,
                 STORAGE_PASS_LEN - 1);
-        _data.settings.heaterTransferCoeff = 20.0f;
-        _data.settings.heaterThermalMass = 5000.0f;
-        _data.settings.heaterPowerW = 2000.0f;
+        applyHeaterDefaults(_data.settings);
         _data.settings.heaterDeadband = legacyAsymmetric.settings.heaterDeadband;
         _data.settings.heaterMinSwitchSec =
             legacyAsymmetric.settings.heaterMinSwitchSec;
@@ -348,9 +371,7 @@ bool Storage::begin() {
               STORAGE_SSID_LEN - 1);
       strncpy(_data.settings.wifiPass, legacyV9.settings.wifiPass,
               STORAGE_PASS_LEN - 1);
-      _data.settings.heaterTransferCoeff = 20.0f;
-      _data.settings.heaterThermalMass = 5000.0f;
-      _data.settings.heaterPowerW = 2000.0f;
+      applyHeaterDefaults(_data.settings);
       _data.settings.heaterDeadband = legacyV9.settings.heaterDeadband;
       _data.settings.heaterMinSwitchSec = legacyV9.settings.heaterMinSwitchSec;
       _data.settings.mixerRestSec = legacyV9.settings.mixerRestSec;
@@ -382,10 +403,7 @@ bool Storage::begin() {
               STORAGE_SSID_LEN - 1);
             strncpy(_data.settings.wifiPass, legacyV10.settings.wifiPass,
               STORAGE_PASS_LEN - 1);
-            _data.settings.heaterTransferCoeff =
-          legacyV10.settings.heaterTransferCoeff;
-            _data.settings.heaterThermalMass = legacyV10.settings.heaterThermalMass;
-      _data.settings.heaterPowerW = 2000.0f;
+      applyHeaterDefaults(_data.settings);
             _data.settings.heaterDeadband = legacyV10.settings.heaterDeadband;
             _data.settings.heaterMinSwitchSec = legacyV10.settings.heaterMinSwitchSec;
             _data.settings.mixerRestSec = legacyV10.settings.mixerRestSec;
@@ -403,6 +421,42 @@ bool Storage::begin() {
                sizeof(_data.profiles[i].steps));
       }
       Serial.println("Storage: migrated version 10 profile masses");
+      save();
+      return true;
+    }
+    }
+
+    {
+    LegacyV11EepromDataEE legacyV11;
+    EEPROM.get(0, legacyV11);
+    uint32_t legacyV11Calc = crc32(
+        (uint8_t*)&legacyV11,
+        sizeof(LegacyV11EepromDataEE) - sizeof(legacyV11.crc));
+
+    if (legacyV11.magic == STORAGE_MAGIC && legacyV11.version == 11 &&
+        legacyV11.crc == legacyV11Calc) {
+      memset(&_data, 0, sizeof(_data));
+      _data.magic = STORAGE_MAGIC;
+      _data.version = STORAGE_VERSION;
+      strncpy(_data.settings.wifiSSID, legacyV11.settings.wifiSSID,
+              STORAGE_SSID_LEN - 1);
+      strncpy(_data.settings.wifiPass, legacyV11.settings.wifiPass,
+              STORAGE_PASS_LEN - 1);
+      // k and C_e cannot be converted meaningfully; start from defaults
+      // until the heater is recalibrated. Rated power carries over.
+      applyHeaterDefaults(_data.settings);
+      _data.settings.heaterPowerW = legacyV11.settings.heaterPowerW;
+      _data.settings.heaterPowerEffW = legacyV11.settings.heaterPowerW * 0.95f;
+      _data.settings.heaterDeadband = legacyV11.settings.heaterDeadband;
+      _data.settings.heaterMinSwitchSec = legacyV11.settings.heaterMinSwitchSec;
+      _data.settings.mixerRestSec = legacyV11.settings.mixerRestSec;
+      _data.settings.mixerOnSec = legacyV11.settings.mixerOnSec;
+      _data.settings.coolDownSec = legacyV11.settings.coolDownSec;
+      _data.profileCount = min(legacyV11.profileCount,
+                               (uint8_t)STORAGE_MAX_PROFILES);
+      memcpy(_data.profiles, legacyV11.profiles,
+             sizeof(ProfileEE) * _data.profileCount);
+      Serial.println("Storage: migrated version 11 heater model");
       save();
       return true;
     }
@@ -426,9 +480,7 @@ void Storage::loadDefaults() {
   _data.version = STORAGE_VERSION;
 
   strncpy(_data.settings.wifiSSID, "MashController", STORAGE_SSID_LEN - 1);
-  _data.settings.heaterTransferCoeff = 20.0f;
-  _data.settings.heaterThermalMass = 5000.0f;
-  _data.settings.heaterPowerW = 2000.0f;
+  applyHeaterDefaults(_data.settings);
   _data.settings.heaterDeadband = 0.1f;
   _data.settings.heaterMinSwitchSec = 10;
   _data.settings.mixerRestSec   = 15;

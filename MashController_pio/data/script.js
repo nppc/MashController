@@ -823,14 +823,23 @@ async function loadSettings() {
         const res = await fetch('settings');
         settings = await res.json();
 
-        document.getElementById('setHeaterTransferCoeff').value =
-          settings.heaterTransferCoeff ?? 20;
-
-        document.getElementById('setHeaterThermalMass').value =
-          settings.heaterThermalMass ?? 5000;
-
         document.getElementById('setHeaterPowerW').value =
           settings.heaterPowerW ?? 2000;
+
+        document.getElementById('setHeaterPowerEffW').value =
+          Math.round(settings.heaterPowerEffW ?? 1900);
+
+        document.getElementById('setHeaterTauSec').value =
+          Math.round(settings.heaterTauSec ?? 90);
+
+        document.getElementById('setHeaterStoreGain').value =
+          Number(settings.heaterStoreGain ?? 1.2).toFixed(2);
+
+        document.getElementById('setHeaterLossWPerC').value =
+          Number(settings.heaterLossWPerC ?? 5).toFixed(2);
+
+        document.getElementById('setHeaterAmbientC').value =
+          settings.heaterAmbientC ?? 20;
 
         document.getElementById('setMixerOnSec').value =
             settings.mixerOnSec ?? 5;
@@ -920,16 +929,28 @@ async function saveSettings() {
     try {
 
         const payload = {
-            heaterTransferCoeff: parseFloat(
-              document.getElementById('setHeaterTransferCoeff').value
-            ),
-
-            heaterThermalMass: parseFloat(
-              document.getElementById('setHeaterThermalMass').value
-            ),
-
             heaterPowerW: parseFloat(
               document.getElementById('setHeaterPowerW').value
+            ),
+
+            heaterPowerEffW: parseFloat(
+              document.getElementById('setHeaterPowerEffW').value
+            ),
+
+            heaterTauSec: parseFloat(
+              document.getElementById('setHeaterTauSec').value
+            ),
+
+            heaterStoreGain: parseFloat(
+              document.getElementById('setHeaterStoreGain').value
+            ),
+
+            heaterLossWPerC: parseFloat(
+              document.getElementById('setHeaterLossWPerC').value
+            ),
+
+            heaterAmbientC: parseFloat(
+              document.getElementById('setHeaterAmbientC').value
             ),
 
             mixerOnSec: parseInt(

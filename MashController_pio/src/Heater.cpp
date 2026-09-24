@@ -1,105 +1,112 @@
 #include "Heater.h"
-#include "Storage.h"
+
+#include <math.h>
+
+#include "HeaterModel.h"
 #include "MashProfile.h"   // targetTemperature
+#include "Outputs.h"
+#include "Sensor.h"
+#include "Storage.h"
+
+// On/off control that accounts for the heat stored in the element and pot
+// base. The heater switches off as soon as the stored heat is enough to carry
+// the water to the target, and back on when even the predicted peak would
+// fall below target - deadband. Calibrated values come from the Heater
+// Calibration page.
 
 bool heaterOn = false;
 
 namespace {
-float filteredTemperature = 0.0f;
-float elementTemperature = 20.0f;
-float modelWaterTemperature = 20.0f;
-float waterMassKg = 0.0f;
-float waterThermalMass = 0.0f;
-unsigned long previousThermalUpdateAt = 0;
-unsigned long lastSwitchAt = 0;
-bool haveFilteredTemperature = false;
-bool thermalModelReady = false;
-bool hasSwitched = false;
-constexpr float TEMP_FILTER_ALPHA = 0.35f;
 constexpr float WATER_SPECIFIC_HEAT = 4186.0f;
 constexpr float GRAIN_SPECIFIC_HEAT = 1900.0f;
+constexpr float MIN_AVERAGE_SEC = 4.0f;
+constexpr float MAX_AVERAGE_SEC = 120.0f;
+
+HeaterModel model;
+float capacityJPerC = 20.0f * WATER_SPECIFIC_HEAT;
+bool modelReady = false;
+bool outputWasOn = false;
+unsigned long previousUpdateAt = 0;
+unsigned long lastSwitchAt = 0;
+bool hasSwitched = false;
+float predictedPeak = NAN;
+
+// Average over one full mixer cycle so the mixing ripple cancels out.
+float averageWindowSec(const SettingsEE &s) {
+  const float cycle = (float)s.mixerOnSec + (float)s.mixerRestSec;
+  return constrain(cycle, MIN_AVERAGE_SEC, MAX_AVERAGE_SEC);
+}
 }
 
-void heaterResetThermalModel(float initialTemperature, float newWaterMassKg) {
-  waterMassKg = max(newWaterMassKg, 0.1f);
-  waterThermalMass = waterMassKg * WATER_SPECIFIC_HEAT;
-  filteredTemperature = initialTemperature;
-  elementTemperature = initialTemperature;
-  modelWaterTemperature = initialTemperature;
-  previousThermalUpdateAt = millis();
-  haveFilteredTemperature = true;
-  thermalModelReady = true;
+void heaterResetThermalModel(float /*initialTemperature*/, float waterMassKg) {
+  capacityJPerC = max(waterMassKg, 0.1f) * WATER_SPECIFIC_HEAT;
+  model.reset();
+  previousUpdateAt = millis();
+  modelReady = true;
+  outputWasOn = false;
   heaterOn = false;
   lastSwitchAt = 0;
   hasSwitched = false;
+  predictedPeak = NAN;
 }
 
 void heaterIncludeGrain(float grainMassKg) {
-  if (!thermalModelReady) return;
-  waterThermalMass += max(grainMassKg, 0.0f) * GRAIN_SPECIFIC_HEAT;
+  if (!modelReady) return;
+  capacityJPerC += max(grainMassKg, 0.0f) * GRAIN_SPECIFIC_HEAT;
 }
 
-void updateHeater(float currentTemp) {
+float heaterPredictedPeak() {
+  return predictedPeak;
+}
+
+void updateHeater() {
   if (!isRunning || inCoolDown) {
     heaterOn = false;
-    haveFilteredTemperature = false;
-    thermalModelReady = false;
+    modelReady = false;
     hasSwitched = false;
+    predictedPeak = NAN;
     return;
   }
 
-  SettingsEE &settings = storage.settings();
+  SettingsEE &s = storage.settings();
   const unsigned long now = millis();
 
-  if (!haveFilteredTemperature) {
-    filteredTemperature = currentTemp;
-    haveFilteredTemperature = true;
-  } else {
-    filteredTemperature += TEMP_FILTER_ALPHA *
-                           (currentTemp - filteredTemperature);
+  if (!modelReady) {
+    heaterResetThermalModel(readTemperature(), activeProfile.waterMassKg);
   }
 
-  if (!thermalModelReady) {
-    heaterResetThermalModel(filteredTemperature, activeProfile.waterMassKg);
+  // Advance the stored-heat model with what the SSR actually did since the
+  // last reading (pause can hold the output off while heaterOn is true).
+  model.configure(s.heaterPowerEffW, s.heaterTauSec, s.heaterStoreGain);
+  const float dtSec = min(now - previousUpdateAt, 10000UL) / 1000.0f;
+  model.update(dtSec, outputWasOn);
+  previousUpdateAt = now;
+
+  const float windowSec = averageWindowSec(s);
+  const float averageC = averageTemperature(windowSec);
+  const float lossW = max(s.heaterLossWPerC, 0.0f) * (averageC - s.heaterAmbientC);
+
+  // The average lags by half its window; bring it forward with the rate the
+  // model says the water is changing at right now.
+  const float rateCPerSec = (model.flowW() - lossW) / capacityJPerC;
+  const float waterNowC = averageC + rateCPerSec * windowSec * 0.5f;
+  predictedPeak = model.predictPeak(waterNowC, capacityJPerC, lossW);
+
+  const bool switchLocked =
+      hasSwitched &&
+      (now - lastSwitchAt < (unsigned long)s.heaterMinSwitchSec * 1000UL);
+
+  if (!switchLocked) {
+    if (!heaterOn && predictedPeak < targetTemperature - s.heaterDeadband) {
+      heaterOn = true;
+      lastSwitchAt = now;
+      hasSwitched = true;
+    } else if (heaterOn && predictedPeak >= targetTemperature) {
+      heaterOn = false;
+      lastSwitchAt = now;
+      hasSwitched = true;
+    }
   }
 
-  const unsigned long elapsedMs = now - previousThermalUpdateAt;
-  if (elapsedMs > 0) {
-    const float elapsedSec = min(elapsedMs, 10000UL) / 1000.0f;
-    const float transferCoeff = max(settings.heaterTransferCoeff, 0.1f);
-    const float elementThermalMass = max(settings.heaterThermalMass, 1.0f);
-    const float heatToWater =
-      transferCoeff * (elementTemperature - modelWaterTemperature);
-
-    elementTemperature +=
-        (settings.heaterPowerW * (heaterOn ? 1.0f : 0.0f) - heatToWater) *
-        elapsedSec / elementThermalMass;
-    modelWaterTemperature += heatToWater * elapsedSec / waterThermalMass;
-    // Correct the estimated water state toward the filtered sensor reading.
-    modelWaterTemperature +=
-      0.5f * (filteredTemperature - modelWaterTemperature);
-    previousThermalUpdateAt = now;
-  }
-
-  const bool switchLocked = hasSwitched &&
-                            (now - lastSwitchAt <
-                             (unsigned long)settings.heaterMinSwitchSec * 1000UL);
-
-  if (switchLocked) return;
-
-  const float predictedEquilibrium =
-      (waterThermalMass * filteredTemperature +
-       max(settings.heaterThermalMass, 1.0f) * elementTemperature) /
-      (waterThermalMass + max(settings.heaterThermalMass, 1.0f));
-
-  if (!heaterOn && filteredTemperature <=
-                       targetTemperature - settings.heaterDeadband) {
-    heaterOn = true;
-    lastSwitchAt = now;
-    hasSwitched = true;
-  } else if (heaterOn && predictedEquilibrium >= targetTemperature) {
-    heaterOn = false;
-    lastSwitchAt = now;
-    hasSwitched = true;
-  }
+  outputWasOn = heaterOutputActive();
 }

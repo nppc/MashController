@@ -11,6 +11,7 @@
 #include "Calibration.h"
 #include "Mixer.h"
 #include "MashProfile.h"
+#include "Outputs.h"
 
 ESP8266WebServer server(80);
 bool otaEnabled = false;
@@ -65,7 +66,9 @@ static void handleFileRead(String path) {
 /* -------------------------------------------------------------------------- */
 
 static void handleGetProfiles() {
-  StaticJsonDocument<2048> doc;
+  // Current storage allows up to 15 profiles x 6 steps each; keep a margin above
+  // the worst-case serialized payload for names, floats, and nested arrays.
+  StaticJsonDocument<4096> doc;
   JsonArray arr = doc.createNestedArray("profiles");
 
   for (uint8_t i = 0; i < storage.profileCount(); i++) {
@@ -99,7 +102,7 @@ static void handleSaveProfiles() {
     return;
   }
 
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<4096> doc;
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
     server.send(400, "text/plain", "JSON parse error");
@@ -151,12 +154,10 @@ static void handleSaveProfiles() {
 
 static void handleCalibrationStart() {
   const float waterLiters = server.arg("liters").toFloat();
-  if (waterLiters < 0.1f || waterLiters > 100.0f) {
-    server.send(400, "text/plain", "Water volume must be between 0.1 and 100 litres");
-    return;
-  }
-  if (!calibrationStart(waterLiters)) {
-    server.send(409, "text/plain", "Controller is busy");
+  const float targetC = server.hasArg("target") ? server.arg("target").toFloat() : 65.0f;
+  const float ambientC = server.hasArg("ambient") ? server.arg("ambient").toFloat() : 20.0f;
+  if (!calibrationStart(waterLiters, targetC, ambientC)) {
+    server.send(409, "text/plain", calibrationLastError());
     return;
   }
   server.send(200, "text/plain", "Calibration started");
@@ -168,8 +169,9 @@ static void handleCalibrationStop() {
 }
 
 static void handleCalibrationStatus() {
+  const long since = server.hasArg("since") ? server.arg("since").toInt() : 0;
   String out;
-  calibrationStatusJson(out);
+  calibrationStatusJson(out, (uint16_t)constrain(since, 0L, 65535L));
   server.send(200, "application/json", out);
 }
 
@@ -179,14 +181,17 @@ static void handleCalibrationStatus() {
 
 static void handleGetSettings() {
   SettingsEE &s = storage.settings();
-  StaticJsonDocument<384> doc;
+  StaticJsonDocument<512> doc;
 
   doc["wifiSSID"] = s.wifiSSID;
   // Password is never echoed back - only whether one is currently set.
   doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
-  doc["heaterTransferCoeff"] = s.heaterTransferCoeff;
-  doc["heaterThermalMass"] = s.heaterThermalMass;
   doc["heaterPowerW"] = s.heaterPowerW;
+  doc["heaterPowerEffW"] = s.heaterPowerEffW;
+  doc["heaterTauSec"] = s.heaterTauSec;
+  doc["heaterStoreGain"] = s.heaterStoreGain;
+  doc["heaterLossWPerC"] = s.heaterLossWPerC;
+  doc["heaterAmbientC"] = s.heaterAmbientC;
   doc["heaterDeadband"] = s.heaterDeadband;
   doc["heaterMinSwitchSec"] = s.heaterMinSwitchSec;
   doc["mixerOnSec"] = s.mixerOnSec;
@@ -216,7 +221,7 @@ static void handleSaveSettings() {
     return;
   }
 
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<768> doc;
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
     server.send(400, "text/plain", "JSON parse error");
@@ -240,14 +245,23 @@ static void handleSaveSettings() {
     strncpy(s.wifiPass, doc["wifiPass"], STORAGE_PASS_LEN - 1);
     s.wifiPass[STORAGE_PASS_LEN - 1] = '\0';
   }
-  if (doc.containsKey("heaterTransferCoeff")) {
-    s.heaterTransferCoeff = max(doc["heaterTransferCoeff"].as<float>(), 0.1f);
+  if (doc["heaterPowerW"].is<float>()) {
+    s.heaterPowerW = constrain(doc["heaterPowerW"].as<float>(), 1.0f, 10000.0f);
   }
-  if (doc.containsKey("heaterThermalMass")) {
-    s.heaterThermalMass = max(doc["heaterThermalMass"].as<float>(), 1.0f);
+  if (doc["heaterPowerEffW"].is<float>()) {
+    s.heaterPowerEffW = constrain(doc["heaterPowerEffW"].as<float>(), 1.0f, 10000.0f);
   }
-  if (doc.containsKey("heaterPowerW")) {
-    s.heaterPowerW = max(doc["heaterPowerW"].as<float>(), 1.0f);
+  if (doc["heaterTauSec"].is<float>()) {
+    s.heaterTauSec = constrain(doc["heaterTauSec"].as<float>(), 5.0f, 1200.0f);
+  }
+  if (doc["heaterStoreGain"].is<float>()) {
+    s.heaterStoreGain = constrain(doc["heaterStoreGain"].as<float>(), 0.2f, 5.0f);
+  }
+  if (doc["heaterLossWPerC"].is<float>()) {
+    s.heaterLossWPerC = constrain(doc["heaterLossWPerC"].as<float>(), 0.0f, 100.0f);
+  }
+  if (doc["heaterAmbientC"].is<float>()) {
+    s.heaterAmbientC = constrain(doc["heaterAmbientC"].as<float>(), -10.0f, 45.0f);
   }
   if (doc.containsKey("heaterDeadband")) {
     s.heaterDeadband = doc["heaterDeadband"].as<float>();
@@ -522,7 +536,7 @@ static void handleUpdateResult() {
 }
 
 static void handleStatus() {
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<640> doc;
 
   doc["running"] = isRunning;
   doc["paused"] = isPaused;
@@ -533,10 +547,9 @@ static void handleStatus() {
   doc["step"] = currentStep;
   doc["stepTemp"] = targetTemperature;
   doc["currentTemp"] = readTemperature();
-  const bool holdTemperatureWhilePaused =
-    isPaused && !waitingForTemp && !waitingForUser;
-  doc["heaterOn"] = heaterOn && isRunning && !inCoolDown &&
-                     (!isPaused || holdTemperatureWhilePaused);
+  doc["heaterOn"] = heaterOutputActive();
+  const float predictedPeak = heaterPredictedPeak();
+  if (isfinite(predictedPeak)) doc["predictedPeak"] = predictedPeak;
 
   doc["mixerOn"] = mixerOn;
   doc["mixerMode"] = mixerManualMode ? "manual" : "auto";

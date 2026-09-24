@@ -26,19 +26,20 @@ void outputsInit() {
   analogWrite(MIXER_PIN, MIXER_PWM_RANGE);
 }
 
+bool heaterOutputActive() {
+  const bool holdTemperatureWhilePaused =
+    isPaused && !waitingForTemp && !waitingForUser;
+
+  return (heaterOn && isRunning && !inCoolDown &&
+          (!isPaused || holdTemperatureWhilePaused)) ||
+         (calibrationIsActive() && calibrationHeaterIsOn());
+}
+
 // Writes heaterOn/mixerOn out to their actual pins. Called once per loop()
 // iteration rather than at every place that sets those booleans, so the
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
-  const bool holdTemperatureWhilePaused =
-    isPaused && !waitingForTemp && !waitingForUser;
-
-  digitalWrite(HEATER_PIN,
-           (heaterOn && isRunning && !inCoolDown &&
-            (!isPaused || holdTemperatureWhilePaused)) ||
-           (calibrationIsActive() && calibrationHeaterIsOn())
-             ? HIGH
-             : LOW);
+  digitalWrite(HEATER_PIN, heaterOutputActive() ? HIGH : LOW);
 
   if (!mixerOn) {
     analogWrite(MIXER_PIN, MIXER_PWM_RANGE);

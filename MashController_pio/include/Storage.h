@@ -15,7 +15,7 @@
 #define STORAGE_PASS_LEN     24
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      11            // bump if the struct layout changes
+#define STORAGE_VERSION      12            // bump if the struct layout changes
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
@@ -37,10 +37,13 @@ struct ProfileEE {
 struct SettingsEE {
   char     wifiSSID[STORAGE_SSID_LEN];
   char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterTransferCoeff;  // k, watts per degree C
-  float    heaterThermalMass;    // C_e, joules per degree C
-  float    heaterPowerW;         // installed heater electrical power
-  float    heaterDeadband;       // degrees C below target before switching on
+  float    heaterPowerW;         // installed (rated) heater electrical power
+  float    heaterPowerEffW;      // calibrated power that reaches the water
+  float    heaterTauSec;         // calibrated time constant of the stored heat
+  float    heaterStoreGain;      // calibrated overshoot / (heaterPowerEffW * heaterTauSec)
+  float    heaterLossWPerC;      // calibrated heat loss, watts per degree C above room
+  float    heaterAmbientC;       // room temperature used for the heat loss
+  float    heaterDeadband;       // predicted peak must fall this far below target to switch on
   uint16_t heaterMinSwitchSec;   // minimum time between heater switches
   uint8_t  mixerRestSec;         // length of the rest period
   uint8_t  mixerOnSec;           // seconds of mixerDurationSec the motor runs
