@@ -123,7 +123,6 @@
 			Stop the process to edit profiles.
 		  </div>
 		<div id="profilesEditor">
-			<!-- Выбор профиля -->
 			<div class="profile-header">
 				<div class="profile-select-row">
 
@@ -148,7 +147,6 @@
 					<span style="font-size:16px; line-height:0;">✚</span>
 				  </button>
 
-						  <!-- Кнопка удаления профиля -->
 						  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">🗑
 						</button>
 				</div>
@@ -156,10 +154,8 @@
 				
 			</div>
 
-			<!-- Имя профиля -->
-					<div class="label-small">Profile Name</div>
+			<div class="label-small">Profile Name</div>
 			<input id="profileName" class="input-dark" type="text" 
-				   placeholder="Имя профиля" 
 				   onchange="updateProfileName(this.value)"
 				   style="margin-bottom:12px">
 
@@ -178,7 +174,6 @@
 			  </div>
 			</div>
 
-			<!-- Контейнер шагов -->
 			<div id="stepsContainer"></div>
 
 			<div class="profile-actions">
@@ -194,7 +189,7 @@
 	<div id="settings" class="screen">
 
 	  <div class="stat-card">
-		<div class="label">Heater control</div>
+		<div class="label">Heater</div>
 
 		<div class="settings-group">
 
@@ -209,7 +204,7 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Effective Power <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-title">Actual Heating Power <a class="help-link" href="calibration.html">?</a></div>
 			  <div class="setting-desc">
 				Calibrated power that reaches the water, in watts.
 			  </div>
@@ -220,7 +215,7 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Time Constant <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-title">Stored Heat Delay <a class="help-link" href="calibration.html">?</a></div>
 			  <div class="setting-desc">
 				Calibrated τ: how fast stored heat reaches the water, in seconds.
 			  </div>
@@ -231,7 +226,7 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Store Gain <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-title">Residual Heat Factor <a class="help-link" href="calibration.html">?</a></div>
 			  <div class="setting-desc">
 				Calibrated overshoot scale, usually a little above 1.
 			  </div>
@@ -242,7 +237,7 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Heat Loss <a class="help-link" href="calibration.html">?</a></div>
+			  <div class="setting-title">Heat Loss Rate <a class="help-link" href="calibration.html">?</a></div>
 			  <div class="setting-desc">
 				Calibrated loss in watts per °C above room temperature.
 			  </div>
@@ -253,7 +248,7 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Room Temperature</div>
+			  <div class="setting-title">Ambient Temperature</div>
 			  <div class="setting-desc">
 				Used with Heat Loss. Update it if the brewing room is much warmer or colder.
 			  </div>
@@ -279,7 +274,7 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Min Switch Time</div>
+			  <div class="setting-title">Minimum On/Off Time</div>
 			  <div class="setting-desc">
 				Minimum seconds between heater state changes to avoid rapid cycling.
 			  </div>
@@ -328,15 +323,7 @@
 			  max="600">
 		  </div>
 
-		</div>
-	  </div>
-	  
-	  <div class="stat-card">
-		<div class="label">Cool-Down</div>
-
-		<div class="settings-group">
-
-		  <div class="setting-row">
+		  		  <div class="setting-row">
 			<div>
 			  <div class="setting-title">Cool-Down Time</div>
 			  <div class="setting-desc">
@@ -353,8 +340,7 @@
 		  </div>
 
 		</div>
-	</div>
-
+	  </div>
 	  <div class="stat-card">
 		<div class="label">Temperature Sensor</div>
 
