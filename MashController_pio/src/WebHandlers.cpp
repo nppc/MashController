@@ -578,7 +578,7 @@ static void handleStatus() {
   doc["currentTemp"] = round1(readTemperature());
   doc["heaterOn"] = heaterOutputActive();
   const float predictedPeak = heaterPredictedPeak();
-  if (isfinite(predictedPeak)) doc["predictedPeak"] = round1(predictedPeak);
+  if (isfinite(predictedPeak)) doc["predictedPeak"] = predictedPeak;
 
   doc["mixerOn"] = mixerOn;
   doc["mixerMode"] = mixerManualMode ? "manual" : "auto";

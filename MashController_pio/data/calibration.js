@@ -317,15 +317,16 @@ function renderLiveMetrics(status, samples, analysis) {
       ['Target', formatNumber(target, 1, ' °C')]
     ];
   } else {
-    const peak = Number(status.peakTemp);
-    const peakCoast = Number(status.peakCoastSec);
-    const coastNow = Number(status.elapsedSec) - off;
-    items = [
-      ['Peak so far', formatNumber(peak, 2, ' °C')],
-      ['Rise since off', formatNumber(peak - target, 2, ' °C')],
-      ['Since peak', calibrationFormatTime(coastNow - peakCoast)],
-      ['Preliminary τ', analysis ? `${analysis.tau} s` : '--']
-    ];
+      const peakKnown = Number.isFinite(status.peakTemp) && Number.isFinite(status.peakCoastSec);
+      const peak = Number(status.peakTemp);
+      const peakCoast = Number(status.peakCoastSec);
+      const coastNow = Number(status.elapsedSec) - off;
+      items = [
+        ['Peak so far', peakKnown ? formatNumber(peak, 2, ' °C') : 'Waiting for peak'],
+        ['Rise since off', peakKnown ? formatNumber(peak - target, 2, ' °C') : '--'],
+        ['Since peak', peakKnown ? calibrationFormatTime(coastNow - peakCoast) : '--'],
+        ['Preliminary τ', analysis ? `${analysis.tau} s` : '--']
+      ];
   }
   document.getElementById('calibrationLiveMetrics').innerHTML = items
     .map(([label, value]) => `<div class="live-metric"><span>${label}</span><strong>${value}</strong></div>`)

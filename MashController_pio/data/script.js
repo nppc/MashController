@@ -299,6 +299,8 @@ const gradient = ctx.createLinearGradient(0, 0, 0, 300);
 gradient.addColorStop(0, 'rgba(255, 107, 91, 0.35)');
 gradient.addColorStop(1, 'rgba(255, 107, 91, 0)');
 
+let adaptiveYScale = false;
+
 const chart = new Chart(ctx, {
   type: 'line',
   data: {
@@ -318,7 +320,7 @@ const chart = new Chart(ctx, {
         data: [],
         borderColor: '#3ecf8e',
         borderWidth: 1.5,
-        borderDash: [6, 4],
+        borderDash: [2, 4],
         pointRadius: 0,
         tension: 0,
         fill: false
@@ -329,7 +331,7 @@ const chart = new Chart(ctx, {
     responsive: true,
     maintainAspectRatio: false,
     animation: { duration: 300, easing: 'linear' },
-    interaction: { intersect: false, mode: 'index' },
+    interaction: { mode: 'undefined' },
     plugins: {
       legend: { display: false },
       tooltip: { enabled: false }
@@ -352,6 +354,7 @@ const chart = new Chart(ctx, {
         border: { display: false }
       },
       y: {
+        //grace: '10%',
         min: 10,
         max: 100,
         grid: { color: '#232a3b', drawTicks: false },
@@ -361,6 +364,23 @@ const chart = new Chart(ctx, {
 	}
   }
 });
+
+document.getElementById('tempChart').onclick = () => {
+adaptiveYScale = !adaptiveYScale;
+ 
+if (adaptiveYScale) {
+chart.options.scales.y.min = undefined;
+chart.options.scales.y.max = undefined;
+chart.options.scales.y.grace = '10%';
+} else {
+chart.options.scales.y.min = 10;
+chart.options.scales.y.max = 100;
+chart.options.scales.y.grace = undefined;
+}
+ 
+chart.update();
+};
+
 
 /* YOUR ORIGINAL UPDATE() */
 async function update() {

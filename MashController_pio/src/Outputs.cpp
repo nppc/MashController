@@ -28,7 +28,7 @@ void outputsInit() {
 
 bool heaterOutputActive() {
   const bool holdTemperatureWhilePaused =
-    isPaused && !waitingForTemp && !waitingForUser;
+    isPaused && !waitingForTemp; // && !waitingForUser;
 
   return (heaterOn && isRunning && !inCoolDown &&
           (!isPaused || holdTemperatureWhilePaused)) ||
