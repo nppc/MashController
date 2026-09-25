@@ -14,8 +14,10 @@ bool conversionInProgress = false;
 float tempHistory[HISTORY_SIZE];
 int histIndex = 0;
 
+#ifndef DEBUG_FAKE_TEMP
 static unsigned long conversionStartTime = 0;
 static unsigned long nextConversionAllowedAt = 0;
+#endif
 constexpr uint8_t TEMPERATURE_AVERAGE_SAMPLES = 5;
 
 static void addTemp(float t) {

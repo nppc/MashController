@@ -8,6 +8,4 @@ void applyOutputs();   // call every loop() iteration
 // pause and cool-down) or the calibration test.
 bool heaterOutputActive();
 
-//bool coolerOn;  // true when the cooler is on
-
 #endif
