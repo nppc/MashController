@@ -45,21 +45,44 @@ static void handleFileRead(String path) {
   if (path.endsWith("/")) path += "index.html";
 
   String contentType = "text/html";
-  if (path.endsWith(".css")) contentType = "text/css";
-  if (path.endsWith(".js")) contentType = "application/javascript";
+  if (path.endsWith(".css"))  contentType = "text/css";
+  if (path.endsWith(".js"))   contentType = "application/javascript";
   if (path.endsWith(".json")) contentType = "application/json";
 
+  // --- NEW: check gzip version first ---
+  String gzPath = path + ".gz";
+  if (LittleFS.exists(gzPath)) {
+    File file = LittleFS.open(gzPath, "r");
+
+    // apply same caching rules for gzipped version
+    if (path == "/ota.html") {
+      server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      server.sendHeader("Pragma", "no-cache");
+    } else if (path == "/chart.js" || path.endsWith(".png")) {
+      server.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (path == "/style.css" || path == "/script.js" || path == "/calibration.js") {
+      server.sendHeader("Cache-Control", "public, max-age=3600");
+    }
+
+    server.streamFile(file, contentType);   // ESP adds Content-Encoding: gzip automatically
+    file.close();
+    return;
+  }
+
+  // --- normal (non-gz) version ---
   if (LittleFS.exists(path)) {
     File file = LittleFS.open(path, "r");
-  if (path == "/ota.html") {
-    server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    server.sendHeader("Pragma", "no-cache");
-  } else if (path == "/chart.js" || path.endsWith(".png")) {
-    server.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
-  } else if (path == "/style.css" || path == "/script.js" || path == "/calibration.js") {
-    server.sendHeader("Cache-Control", "public, max-age=3600");
-  }
-  server.streamFile(file, contentType);
+
+    if (path == "/ota.html") {
+      server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      server.sendHeader("Pragma", "no-cache");
+    } else if (path == "/chart.js" || path.endsWith(".png")) {
+      server.sendHeader("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (path == "/style.css" || path == "/script.js" || path == "/calibration.js") {
+      server.sendHeader("Cache-Control", "public, max-age=3600");
+    }
+
+    server.streamFile(file, contentType);
     file.close();
     return;
   }
