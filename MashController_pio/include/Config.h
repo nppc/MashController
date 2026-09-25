@@ -22,6 +22,8 @@
 // defaults OFF during the boot window before setup() runs.
 #define MIXER_PIN D5
 
+#define COOLER_PIN D6
+
 #define HISTORY_SIZE 180
 #define READ_INTERVAL_MS 2000UL
 #define CONVERSION_TIME_MS 750UL   // 12-bit resolution conversion time

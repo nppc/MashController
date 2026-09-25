@@ -6,6 +6,8 @@
 #include "Mixer.h"
 #include "MashProfile.h"
 
+bool coolerOn = LOW;
+
 namespace {
 constexpr uint32_t MIXER_PWM_FREQUENCY_HZ = 500;
 constexpr uint32_t MIXER_PWM_RANGE = 1023;
@@ -17,6 +19,7 @@ bool mixerWasOn = false;
 }
 
 void outputsInit() {
+
   analogWriteFreq(MIXER_PWM_FREQUENCY_HZ);
   analogWriteRange(MIXER_PWM_RANGE);
   pinMode(HEATER_PIN, OUTPUT);
@@ -24,6 +27,10 @@ void outputsInit() {
 
   pinMode(MIXER_PIN, OUTPUT);
   analogWrite(MIXER_PIN, MIXER_PWM_RANGE);
+
+  pinMode(COOLER_PIN, OUTPUT);
+  digitalWrite(COOLER_PIN, coolerOn);
+
 }
 
 bool heaterOutputActive() {
@@ -40,6 +47,9 @@ bool heaterOutputActive() {
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
   digitalWrite(HEATER_PIN, heaterOutputActive() ? HIGH : LOW);
+
+  coolerOn = heaterOutputActive(); 
+  digitalWrite(COOLER_PIN, coolerOn);
 
   if (!mixerOn) {
     analogWrite(MIXER_PIN, MIXER_PWM_RANGE);
