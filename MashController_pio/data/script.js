@@ -425,10 +425,6 @@ async function update() {
 
     chart.update('none');
 
-    document.getElementById('curTemp').textContent =
-      d.temps.length ? d.temps[d.temps.length - 1].toFixed(1) : '--';
-
-    // targetTemp text is owned by updateStatus(); don't overwrite it here
     document.getElementById('statusDot').style.background = '#3ecf8e';
 
   } catch (e) {
