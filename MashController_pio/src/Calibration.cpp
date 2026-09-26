@@ -21,7 +21,6 @@ constexpr unsigned long MIN_BLOCK_MS = 15UL * 1000UL;
 constexpr unsigned long MAX_BLOCK_MS = 60UL * 1000UL;
 
 constexpr float DEFAULT_TARGET_C = 65.0f;
-const float DEFAULT_AMBIENT_C = storage.settings().heaterAmbientC;
 constexpr float MIN_TARGET_C = 40.0f;
 constexpr float MAX_TARGET_C = 80.0f;
 constexpr float MIN_RISE_C = 15.0f;
@@ -57,7 +56,7 @@ const char *lastError = "";
 
 float waterLiters = 20.0f;
 float targetC = DEFAULT_TARGET_C;
-float ambientC = DEFAULT_AMBIENT_C;
+float ambientC = NAN;  // unknown until a run sets it; status falls back to live settings
 float currentTemp = NAN;
 
 unsigned long startedAt = 0;
@@ -79,8 +78,8 @@ unsigned long blockFirstMs = 0;
 unsigned long blockLastMs = 0;
 
 uint16_t sampleCount = 0;
-uint16_t sampleTimeSec[MAX_SAMPLES];  // block midpoint, relative to startedAt
-int16_t sampleCentiC[MAX_SAMPLES];    // block mean, 1/100 C
+uint16_t* sampleTimeSec = nullptr;  // block midpoint, relative to startedAt
+int16_t* sampleCentiC = nullptr;    // block mean, 1/100 C
 
 bool isValidReading(float t) {
   // 85.0 is the DS18B20 power-on value; -127 means disconnected.
@@ -165,7 +164,7 @@ const char *calibrationLastError() {
 }
 
 bool calibrationStart(float newWaterLiters) {
-  return calibrationStart(newWaterLiters, DEFAULT_TARGET_C, DEFAULT_AMBIENT_C);
+  return calibrationStart(newWaterLiters, DEFAULT_TARGET_C, storage.settings().heaterAmbientC);
 }
 
 bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC) {
@@ -200,6 +199,23 @@ bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC)
     lastError = "Water must start at least 15 C below the target";
     return false;
   }
+
+  if (!sampleTimeSec)
+      sampleTimeSec = new uint16_t[MAX_SAMPLES];
+
+  if (!sampleCentiC)
+      sampleCentiC = new int16_t[MAX_SAMPLES];
+
+  if (!sampleTimeSec || !sampleCentiC) {
+      delete[] sampleTimeSec;
+      delete[] sampleCentiC;
+
+      sampleTimeSec = nullptr;
+      sampleCentiC = nullptr;
+
+      lastError = "Out of memory";
+      return false;
+  }  
 
   waterLiters = newWaterLiters;
   targetC = newTargetC;
@@ -321,7 +337,7 @@ void calibrationStatusJson(String &out, uint16_t firstSample) {
   appendInt(out, "elapsedSec", (long)(elapsedMs / 1000UL));
   appendNumber(out, "currentTemp", isValidReading(temp) ? temp : NAN, 2);
   appendNumber(out, "targetC", targetC, 1);
-  appendNumber(out, "ambientC", ambientC, 1);
+  appendNumber(out, "ambientC", isfinite(ambientC) ? ambientC : storage.settings().heaterAmbientC, 1);
   appendNumber(out, "waterLiters", waterLiters, 2);
   appendNumber(out, "heaterPowerW", s.heaterPowerW, 0);
   appendInt(out, "mixerCycleSec", (long)s.mixerOnSec + (long)s.mixerRestSec);

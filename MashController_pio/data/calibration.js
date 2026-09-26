@@ -2,6 +2,10 @@ let calibrationPoll = null;
 let lastCalibrationStatus = null;
 let lastAnalysedCount = -1;
 let lastAnalysis = null;
+// The Room temperature field starts blank; fill it once from the device's
+// current ambientC (the settings value, or the last run's, whichever the
+// device is reporting) the first time we hear from it, then leave it alone.
+let ambientDefaultSet = false;
 let calibrationLog = { runId: null, t: [], T: [] };
 
 const WATER_J_PER_L_C = 4186;
@@ -386,6 +390,15 @@ function renderCalibrationStatus(status) {
   if (samples.length !== lastAnalysedCount) {
     lastAnalysedCount = samples.length;
     lastAnalysis = analyseCalibration(status);
+  }
+
+  if (!ambientDefaultSet) {
+    ambientDefaultSet = true;
+    const ambientInput = document.getElementById('calibrationAmbientC');
+    const deviceAmbient = Number(status.ambientC);
+    if (ambientInput && !ambientInput.value && Number.isFinite(deviceAmbient)) {
+      ambientInput.value = deviceAmbient.toFixed(1);
+    }
   }
 
   document.getElementById('calibrationTemp').textContent = formatNumber(Number(status.currentTemp), 1, ' °C');
