@@ -449,6 +449,17 @@ function renderMixerBadge(status) {
   mixer.classList.toggle('off', !status.mixerOn);
 }
 
+// A mash and a calibration run can't be active at the same time (the device
+// refuses either while the other is going), so keep the Start button locked
+// whenever a mash is running or cooling down, with a hint why.
+function renderMashLock(status) {
+  const startBtn = document.getElementById('calibrationStart');
+  if (!startBtn) return;
+  const mashBusy = !!(status.running || status.coolDownActive);
+  startBtn.disabled = mashBusy;
+  startBtn.title = mashBusy ? 'A mash is running. Stop it before calibrating.' : '';
+}
+
 async function applyCalibrationValues(analysis) {
   const result = document.getElementById('calibrationResult');
   try {
@@ -491,16 +502,26 @@ async function fetchCalibrationStatus() {
   throw new Error('Calibration log did not load');
 }
 
+// Mash status (mixer badge + the mash-busy lock on Start) is polled on its
+// own timer, independent of the calibration-run poll below, so it stays
+// fresh even while no calibration run is active yet.
+async function pollMashStatus() {
+  try {
+    const response = await fetch('status');
+    if (!response.ok) return;
+    const status = await response.json();
+    renderMixerBadge(status);
+    renderMashLock(status);
+  } catch (error) {
+    // Leave the last known state; a connection problem shows up via the
+    // calibration poll's own error handling instead.
+  }
+}
+
 async function pollCalibration() {
   try {
-    const [status, mixerResponse] = await Promise.all([
-      fetchCalibrationStatus(),
-      fetch('status')
-    ]);
+    const status = await fetchCalibrationStatus();
     renderCalibrationStatus(status);
-    if (mixerResponse.ok) {
-      renderMixerBadge(await mixerResponse.json());
-    }
     if (lastCalibrationStatus && !lastCalibrationStatus.active && calibrationPoll) {
       clearInterval(calibrationPoll);
       calibrationPoll = null;
@@ -546,6 +567,8 @@ document.getElementById('calibrationStop').addEventListener('click', async () =>
 });
 
 renderCalibrationTable([], {});
+pollMashStatus();
+setInterval(pollMashStatus, 3000);
 pollCalibration().then(() => {
   if (lastCalibrationStatus?.active && !calibrationPoll) {
     calibrationPoll = setInterval(pollCalibration, 2000);

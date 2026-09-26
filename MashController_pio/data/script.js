@@ -59,6 +59,17 @@ async function updateStatus() {
     document.getElementById('curTemp').textContent =
       Number(st.currentTemp).toFixed(1);
 
+    // The Settings screen's "Last Reading" reuses this same status poll
+    // (already running every second on every screen) instead of a poll of
+    // its own. sensorFound/sensorOk/address still only refresh via
+    // loadSettings(), on screen open or after Rediscover.
+    const sensorTempEl = document.getElementById('sensorTempAtRead');
+    if (sensorTempEl) {
+      sensorTempEl.textContent = Number.isFinite(st.currentTemp)
+        ? `${Number(st.currentTemp).toFixed(1)} °C`
+        : '-- °C';
+    }
+
     document.getElementById('targetTemp').textContent =
       (st.running && !st.coolDownActive)
         ? Number(st.stepTemp).toFixed(1)
@@ -130,6 +141,7 @@ function updateProcessUI(st) {
   const isPaused = st.paused ?? false;             
   const isRunning = st.running ?? false;           
   const inCoolDown = st.coolDownActive ?? false;   
+  const calibrationActive = st.calibrationActive ?? false;
   const waitingForUser = st.waitingForUser ?? false;
   const waitingForTemperature = st.waiting ?? false;
   const instruction = document.getElementById('pauseInstruction');
@@ -169,7 +181,10 @@ function updateProcessUI(st) {
   }
   resumeButton.textContent = 'RESUME';
   
-	document.getElementById('btnStart').classList.toggle('hidden', isRunning || inCoolDown);
+	const startBtn = document.getElementById('btnStart');
+	startBtn.classList.toggle('hidden', isRunning || inCoolDown);
+	startBtn.disabled = calibrationActive;
+	startBtn.title = calibrationActive ? 'Calibration is running. Stop it before starting a mash.' : '';
 	document.getElementById('btnPause').classList.toggle('hidden', !isRunning || isPaused || inCoolDown);
 	document.getElementById('btnResume').classList.toggle('hidden', !isRunning || !isPaused || inCoolDown);
   document.getElementById('btnSkip').classList.toggle('hidden', !isRunning || inCoolDown || waitingForUser);

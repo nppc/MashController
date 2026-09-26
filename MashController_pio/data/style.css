@@ -1224,7 +1224,6 @@ button:disabled {
 }
 
 .calibration-table {
-  display: none;
   border-collapse: collapse;
   font-size: 13px;
   width: 100%;

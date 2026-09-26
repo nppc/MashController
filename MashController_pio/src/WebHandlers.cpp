@@ -570,6 +570,7 @@ static void handleStatus() {
   StaticJsonDocument<640> doc;
 
   doc["running"] = isRunning;
+  doc["calibrationActive"] = calibrationIsActive();
   doc["paused"] = isPaused;
   doc["waitingForUser"] = waitingForUser;
   doc["profileName"] = activeProfile.name;
