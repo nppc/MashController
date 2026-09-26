@@ -21,7 +21,7 @@ constexpr unsigned long MIN_BLOCK_MS = 15UL * 1000UL;
 constexpr unsigned long MAX_BLOCK_MS = 60UL * 1000UL;
 
 constexpr float DEFAULT_TARGET_C = 65.0f;
-constexpr float DEFAULT_AMBIENT_C = 20.0f;
+const float DEFAULT_AMBIENT_C = storage.settings().heaterAmbientC;
 constexpr float MIN_TARGET_C = 40.0f;
 constexpr float MAX_TARGET_C = 80.0f;
 constexpr float MIN_RISE_C = 15.0f;

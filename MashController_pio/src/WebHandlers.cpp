@@ -48,6 +48,7 @@ static void handleFileRead(String path) {
   if (path.endsWith(".css"))  contentType = "text/css";
   if (path.endsWith(".js"))   contentType = "application/javascript";
   if (path.endsWith(".json")) contentType = "application/json";
+  if (path.endsWith(".ico")) contentType = "image/x-icon";
 
   // --- NEW: check gzip version first ---
   String gzPath = path + ".gz";
@@ -353,7 +354,7 @@ static void handleData() {
 
   for (int i = 0; i < count; i++) {
     int idx = (start + i) % HISTORY_SIZE;
-    json += String(tempHistory[idx], 1);
+    json += String(tempHistory[idx] / 100.0f, 1);
     if (i < count - 1) json += ",";
   }
 
@@ -630,6 +631,7 @@ static void handleStatus() {
 void webHandlersInit() {
   server.on("/", []() { handleFileRead("/index.html"); });
   server.on("/index.html", []() { handleFileRead("/index.html"); });
+  server.on("/favicon.ico", []() { handleFileRead("/favicon.ico"); });
   server.on("/style.css", []() { handleFileRead("/style.css"); });
   server.on("/script.js", []() { handleFileRead("/script.js"); });
   server.on("/chart.js", []() { handleFileRead("/chart.js"); });

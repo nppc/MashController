@@ -12,7 +12,7 @@ bool sensorOk = true;
 float lastGoodTemp = 20.0f;
 bool conversionInProgress = false;
 
-float tempHistory[HISTORY_SIZE];
+int16_t tempHistory[HISTORY_SIZE];
 int histIndex = 0;
 
 #ifndef DEBUG_FAKE_TEMP
@@ -22,7 +22,7 @@ static unsigned long nextConversionAllowedAt = 0;
 constexpr uint8_t TEMPERATURE_AVERAGE_SAMPLES = 5;
 
 static void addTemp(float t) {
-  tempHistory[histIndex % HISTORY_SIZE] = t;
+  tempHistory[histIndex % HISTORY_SIZE] = (int16_t)lroundf(t * 100.0f);
   histIndex++;
 }
 
@@ -82,12 +82,12 @@ float readTemperature() {
   const int available = min(histIndex, (int)TEMPERATURE_AVERAGE_SAMPLES);
   if (available <= 0) return lastGoodTemp;
 
-  float total = 0.0f;
+  int32_t total = 0;   // sum of centi-C; int32_t so it can't overflow across HISTORY_SIZE samples
   const int first = histIndex - available;
   for (int i = 0; i < available; i++) {
     total += tempHistory[(first + i) % HISTORY_SIZE];
   }
-  return total / available;
+  return (total / 100.0f) / available;
 }
 
 float averageTemperature(float windowSec) {
@@ -96,12 +96,12 @@ float averageTemperature(float windowSec) {
   const int available = min(histIndex, count);
   if (available <= 0) return lastGoodTemp;
 
-  float total = 0.0f;
+  int32_t total = 0;   // sum of centi-C; int32_t so it can't overflow across HISTORY_SIZE samples
   const int first = histIndex - available;
   for (int i = 0; i < available; i++) {
     total += tempHistory[(first + i) % HISTORY_SIZE];
   }
-  return total / available;
+  return (total / 100.0f) / available;
 }
 
 void sensorInit() {
@@ -140,7 +140,7 @@ void sensorInit() {
 //  if you push much higher, you may need to increase SUBSTEPS too 
 //  so dt/SUBSTEPS stays small enough to keep the simulation stable.
 #ifndef FAKE_TEMP_SPEED_MULTIPLIER
-#define FAKE_TEMP_SPEED_MULTIPLIER 1.0f
+#define FAKE_TEMP_SPEED_MULTIPLIER 2.0f
 #endif
 
 static float fakeReadTemperature() {
