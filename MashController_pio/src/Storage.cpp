@@ -1,5 +1,59 @@
 #include "Storage.h"
 
+/* ============================================================================
+ * HOW TO USE STORED SETTINGS ACROSS THIS PROJECT
+ * ============================================================================
+ *
+ * `storage` (declared below) is the single global instance. Call
+ * `storage.begin()` once from setup() before anything touches it; it loads
+ * from EEPROM, migrates older layouts if needed, or writes defaults on first
+ * boot / corruption.
+ *
+ * READING A SETTING (any .cpp file, anywhere in the project):
+ *   #include "Storage.h"
+ *   float ambient = storage.settings().heaterAmbientC;
+ *
+ *   `storage.settings()` returns a REFERENCE to the live in-RAM struct
+ *   (_data.settings) - not a copy. There is no separate cache to go stale,
+ *   so every read reflects the current value, including one changed a
+ *   moment ago by a web handler on the same tick. This is how Sensor.cpp's
+ *   fakeReadTemperature() picks up heaterAmbientC changes immediately.
+ *
+ * WRITING A SETTING (e.g. from a web handler):
+ *   SettingsEE &s = storage.settings();
+ *   s.heaterAmbientC = constrain(newValue, -10.0f, 45.0f);
+ *   storage.save();   // <-- REQUIRED to persist to EEPROM
+ *
+ *   The struct mutation itself takes effect in RAM instantly, for every
+ *   other piece of code holding or fetching a reference. `storage.save()`
+ *   only controls whether the change SURVIVES A REBOOT - it recomputes the
+ *   CRC and writes the whole `_data` blob via EEPROM.commit(). Skipping
+ *   save() means the running system behaves correctly but reverts to the
+ *   old value on next boot. Always constrain/validate before assigning;
+ *   save() does not validate for you (see handleSaveSettings in
+ *   WebHandlers.cpp for the pattern of per-field constrain() calls).
+ *
+ * PROFILES ARE DIFFERENT - NOT A LIVE REFERENCE:
+ *   storage.getProfile(index, out)   // copies into `out`
+ *   storage.setProfile(index, p)     // copies `p` in (index == count appends)
+ *   storage.deleteProfile(index)
+ *   storage.clearProfiles()
+ *   Profiles are accessed by value, not by reference, so mutate your local
+ *   copy and call setProfile() to write it back - then storage.save() to
+ *   persist, same as settings.
+ *
+ * ADDING A NEW SETTING FIELD:
+ *   1. Add the field to `SettingsEE` in Storage.h.
+ *   2. Give it a sane default in applyHeaterDefaults() (heater-related) or
+ *      directly in Storage::loadDefaults() (everything else).
+ *   3. If this changes the struct's layout/size, bump STORAGE_VERSION and
+ *      add a LegacyVxxSettingsEE snapshot + migration block in begin(),
+ *      following the existing Legacy* chain above - otherwise old EEPROM
+ *      contents fail the CRC/version check and get wiped to defaults
+ *      instead of migrated.
+ * ==========================================================================
+ */
+
 Storage storage;
 
 namespace {
