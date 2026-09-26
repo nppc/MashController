@@ -392,9 +392,27 @@ function renderCalibrationStatus(status) {
     lastAnalysis = analyseCalibration(status);
   }
 
-  if (!ambientDefaultSet) {
+  // While a run is active the inputs are locked and kept in sync with the
+  // values the device is actually running with (so a page refresh mid-run
+  // shows the real numbers instead of the HTML defaults). Once idle again,
+  // they're unlocked for the next run; the Room temperature field still gets
+  // a one-time default fill from the device if the user hasn't typed one.
+  const litersInput = document.getElementById('calibrationWaterLiters');
+  const targetInput = document.getElementById('calibrationTargetC');
+  const ambientInput = document.getElementById('calibrationAmbientC');
+  [litersInput, targetInput, ambientInput].forEach(input => {
+    if (input) input.disabled = !!status.active;
+  });
+
+  if (status.active) {
+    const deviceLiters = Number(status.waterLiters);
+    const deviceTarget = Number(status.targetC);
+    const deviceAmbient = Number(status.ambientC);
+    if (litersInput && Number.isFinite(deviceLiters)) litersInput.value = deviceLiters;
+    if (targetInput && Number.isFinite(deviceTarget)) targetInput.value = deviceTarget;
+    if (ambientInput && Number.isFinite(deviceAmbient)) ambientInput.value = deviceAmbient.toFixed(1);
+  } else if (!ambientDefaultSet) {
     ambientDefaultSet = true;
-    const ambientInput = document.getElementById('calibrationAmbientC');
     const deviceAmbient = Number(status.ambientC);
     if (ambientInput && !ambientInput.value && Number.isFinite(deviceAmbient)) {
       ambientInput.value = deviceAmbient.toFixed(1);
