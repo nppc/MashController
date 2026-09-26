@@ -12,7 +12,7 @@ bool waitingForUser = false;
 int currentStep = 0;
 bool waitingForTemp = false;
 
-float targetTemperature = 20.0;
+float targetTemperature = NAN;
 
 unsigned long stepStartTime = 0;
 unsigned long stepDurationSec = 0;
@@ -56,7 +56,7 @@ void advanceStep() {
   if (currentStep >= activeProfile.stepCount) {
     isRunning = true;
     heaterOn = false;           // Turn off heater immediately
-    targetTemperature = 20.0;
+    targetTemperature = NAN;
     waitingForUser = false;
     waitingForTemp = false;
     isPaused = false;

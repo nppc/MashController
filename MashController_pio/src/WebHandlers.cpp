@@ -348,18 +348,19 @@ static void handleRediscoverSensor() {
 /* -------------------------------------------------------------------------- */
 
 static void handleData() {
-  String json = "{\"temps\":[";
+  DynamicJsonDocument doc(3072); // TODO: when wil migrate to chunks, then 2048 will be wnough
+  JsonArray temps = doc.createNestedArray("temps");
   int count = min(histIndex, HISTORY_SIZE);
   int start = (histIndex > HISTORY_SIZE) ? histIndex % HISTORY_SIZE : 0;
-
   for (int i = 0; i < count; i++) {
     int idx = (start + i) % HISTORY_SIZE;
-    json += String(tempHistory[idx] / 100.0f, 1);
-    if (i < count - 1) json += ",";
+    temps.add(round1(tempHistory[idx] / 100.0f));
   }
+  doc["target"] = round1(targetTemperature);  // NaN -> null automatically
 
-  json += "],\"target\":" + String(targetTemperature, 1) + "}";
-  server.send(200, "application/json", json);
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
 }
 
 static void handleStartProfile() {
@@ -403,7 +404,7 @@ static void handleStopProfile() {
   isPaused = false;
   waitingForUser = false;
   waitingForTemp = false;
-  targetTemperature = 20.0;
+  targetTemperature = NAN;
   heaterOn = false;
 
   // Mixer shouldn't keep cycling with nothing being mashed.

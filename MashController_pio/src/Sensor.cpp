@@ -9,7 +9,7 @@ DallasTemperature sensors(&oneWire);
 DeviceAddress sensorAddr;
 bool sensorFound = false;
 bool sensorOk = true;
-float lastGoodTemp = 20.0f;
+float lastGoodTemp = NAN;
 bool conversionInProgress = false;
 
 int16_t tempHistory[HISTORY_SIZE];
