@@ -1,6 +1,7 @@
 #include "Sensor.h"
 #include "Heater.h"    // updateHeater() runs on every new reading
 #include "Outputs.h"   // fakeReadTemperature() follows the real heater output
+#include "Storage.h"   // fakeReadTemperature() reads heaterAmbientC from settings
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -131,13 +132,24 @@ void sensorInit() {
 // store heat and pass it on to the water, so the temperature keeps rising
 // after switch-off, just like the real hardware. Starts at 15 C so the
 // calibration test can be run against it.
+// Scales how fast the simulated temperature moves, without changing the
+// cadence sensorUpdate() is called at. 1.0 = physically-accurate real time
+// (tau = 83 s for the element). Bump this up to speed through testing -
+// e.g. 10.0 makes the whole simulation play out 10x faster.
+// At moderate multipliers (5–20x) you should be fine; 
+//  if you push much higher, you may need to increase SUBSTEPS too 
+//  so dt/SUBSTEPS stays small enough to keep the simulation stable.
+#ifndef FAKE_TEMP_SPEED_MULTIPLIER
+#define FAKE_TEMP_SPEED_MULTIPLIER 1.0f
+#endif
+
 static float fakeReadTemperature() {
-  constexpr float POWER_W = 1900.0f;
+  const float POWER_W = storage.settings().heaterPowerW;   // 2 kW under-base element
   constexpr float TRANSFER_W_PER_C = 30.0f;
   constexpr float ELEMENT_J_PER_C = 2500.0f;   // tau = 2500 / 30 = 83 s
-  constexpr float WATER_J_PER_C = 20.0f * 4186.0f;
+  constexpr float WATER_J_PER_C = 10.0f * 4186.0f; // 10 liters
   constexpr float LOSS_W_PER_C = 5.0f;
-  constexpr float AMBIENT_C = 20.0f;
+  const float AMBIENT_C = storage.settings().heaterAmbientC;
   constexpr float SENSOR_TAU_SEC = 10.0f;
   constexpr int SUBSTEPS = 4;
 
@@ -145,7 +157,8 @@ static float fakeReadTemperature() {
   static float waterTemp = 15.0f;
   static float sensorTemp = 15.0f;
 
-  const float dt = (float)READ_INTERVAL_MS / 1000.0f / SUBSTEPS;
+  const float dt = (float)READ_INTERVAL_MS / 1000.0f / SUBSTEPS
+                    * FAKE_TEMP_SPEED_MULTIPLIER;
   const float power = heaterOutputActive() ? POWER_W : 0.0f;
 
   for (int i = 0; i < SUBSTEPS; i++) {
