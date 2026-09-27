@@ -13,4 +13,6 @@ void updateHeater();
 // switched off now (NAN while no mash is running).
 float heaterPredictedPeak();
 
+float heaterEstimatedSecondsToTarget();
+
 #endif

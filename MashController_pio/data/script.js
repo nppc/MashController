@@ -349,7 +349,15 @@ const chart = new Chart(ctx, {
     interaction: { mode: 'undefined' },
     plugins: {
       legend: { display: false },
-      tooltip: { enabled: false }
+      tooltip: { enabled: false },
+      subtitle: {
+        display: true,
+        text: 'no eta',
+        position: 'bottom',
+        align: 'end',
+        color: 'rgba(0,255,150,0.9)',
+        font: { size: 11 }
+      }
 		},
     scales: {
       x: {
@@ -422,6 +430,10 @@ async function update() {
     const windowSize = spacing * (d.temps.length - 1);
     chart.options.scales.x.min = now - windowSize;
     chart.options.scales.x.max = now;
+
+  chart.options.plugins.subtitle.text = d.etaSec
+    ? `~${Math.max(1, Math.round(d.etaSec / 60))} min until target`
+    : '';
 
     chart.update('none');
 

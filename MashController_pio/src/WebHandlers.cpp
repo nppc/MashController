@@ -358,6 +358,9 @@ static void handleData() {
   }
   doc["target"] = round1(targetTemperature);  // NaN -> null automatically
 
+  const float eta = heaterEstimatedSecondsToTarget();
+  if (isfinite(eta)) doc["etaSec"] = (long)eta;
+
   String out;
   serializeJson(doc, out);
   server.send(200, "application/json", out);

@@ -30,6 +30,7 @@ unsigned long previousUpdateAt = 0;
 unsigned long lastSwitchAt = 0;
 bool hasSwitched = false;
 float predictedPeak = NAN;
+float lastWaterNowC = NAN;
 
 // Average over one full mixer cycle so the mixing ripple cancels out.
 float averageWindowSec(const SettingsEE &s) {
@@ -91,6 +92,7 @@ void updateHeater() {
   const float rateCPerSec = (model.flowW() - lossW) / capacityJPerC;
   const float waterNowC = averageC + rateCPerSec * windowSec * 0.5f;
   predictedPeak = model.predictPeak(waterNowC, capacityJPerC, lossW);
+  lastWaterNowC = waterNowC;
 
   const bool switchLocked =
       hasSwitched &&
@@ -109,4 +111,38 @@ void updateHeater() {
   }
 
   outputWasOn = heaterOutputActive();
+}
+
+float heaterEstimatedSecondsToTarget() {
+  if (!modelReady || isnan(lastWaterNowC)) return NAN;
+  if (lastWaterNowC >= targetTemperature) return NAN;
+
+  SettingsEE &s = storage.settings();  // fetched here, not passed in
+
+  HeaterModel sim = model;
+  float T = lastWaterNowC;
+  bool on = heaterOn;
+  const unsigned long now = millis();
+  unsigned long simSwitchElapsedMs = now - lastSwitchAt;
+
+  const float dt = 2.0f;
+  const int maxSteps = (int)(3600.0f / dt);
+
+  for (int i = 0; i < maxSteps; ++i) {
+    sim.update(dt, on);
+    const float lossW = max(s.heaterLossWPerC, 0.0f) * (T - s.heaterAmbientC);
+    const float rate = (sim.flowW() - lossW) / capacityJPerC;
+    T += rate * dt;
+    simSwitchElapsedMs += (unsigned long)(dt * 1000.0f);
+
+    if (T >= targetTemperature) return i * dt;
+
+    const bool locked = simSwitchElapsedMs < (unsigned long)s.heaterMinSwitchSec * 1000UL;
+    if (!locked) {
+      float peak = sim.predictPeak(T, capacityJPerC, lossW);
+      if (!on && peak < targetTemperature - s.heaterDeadband) { on = true;  simSwitchElapsedMs = 0; }
+      else if (on && peak >= targetTemperature)                { on = false; simSwitchElapsedMs = 0; }
+    }
+  }
+  return NAN;
 }
