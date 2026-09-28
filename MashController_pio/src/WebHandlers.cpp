@@ -639,6 +639,7 @@ void webHandlersInit() {
   server.on("/favicon.ico", []() { handleFileRead("/favicon.ico"); });
   server.on("/style.css", []() { handleFileRead("/style.css"); });
   server.on("/script.js", []() { handleFileRead("/script.js"); });
+  server.on("/icons.js", []() { handleFileRead("/icons.js"); });
   server.on("/chart.js", []() { handleFileRead("/chart.js"); });
   server.on("/ota.html", []() { handleFileRead("/ota.html"); });
   server.on("/calibration.html", []() { handleFileRead("/calibration.html"); });
@@ -647,7 +648,7 @@ void webHandlersInit() {
   server.on("/enable-ota", HTTP_GET, handleEnableOta);
   server.on("/update", HTTP_POST, handleUpdateResult, handleUpdateUpload);
 
-  server.on("/profiles_data.json", HTTP_GET, handleGetProfiles);
+  server.on("/profiles_data", HTTP_GET, handleGetProfiles);
   server.on("/saveProfiles", HTTP_POST, handleSaveProfiles);
 
   server.on("/settings", HTTP_GET, handleGetSettings);

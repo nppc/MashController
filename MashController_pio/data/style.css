@@ -357,7 +357,7 @@
 	  letter-spacing: 0.05em;
 	}
 
-	.btn-trash {
+	.btn-icon {
 	  background: transparent;
 	  border: none;
 	  width: 36px;
@@ -372,20 +372,45 @@
 	  flex-shrink: 0;
 	}
 
-	.btn-trash svg {
+	.btn-icon svg {
 	  width: 20px;
 	  height: 20px;
-	  color: var(--accent);
 	  opacity: 0.7;
 	  transition: 0.2s;
 	}
 
-	.btn-trash:hover {
-	  background: rgba(255, 107, 91, 0.1);
+	.btn-icon:hover svg {
+	  opacity: 1;
 	}
 
-	.btn-trash:hover svg {
-	  opacity: 1;
+	/* Profile add button - blue styling */
+	.profile-add-btn {
+	  border: 1px solid rgba(91, 184, 217, 0.3);
+	}
+
+	.profile-add-btn svg {
+	  color: #5bb8d9;
+	}
+
+	.profile-add-btn:hover {
+	  background: rgba(91, 184, 217, 0.1);
+	  border-color: rgba(91, 184, 217, 0.4);
+	}
+
+	.profile-add-btn:hover svg {
+	  color: #6fc8e6;
+	}
+
+	/* Profile delete button - red styling */
+	.profile-delete-btn {
+	  border: 1px solid rgba(255, 184, 217, 0.3);
+	}
+	.profile-delete-btn svg {
+	  color: var(--accent);
+	}
+
+	.profile-delete-btn:hover {
+	  background: rgba(255, 107, 91, 0.1);
 	}
 
 .profile-select-row {
@@ -393,22 +418,6 @@
   gap: 10px;
   margin-bottom: 16px;
   align-items: center;
-}
-.profile-add-btn {
-  width: 52px;
-  background: transparent;
-  border: 1px solid rgba(62, 207, 142, 0.3);
-  color: #5bb8d9;
-  padding: 12px;
-}
-
-.profile-add-btn:hover {
-  background: rgba(91, 184, 217, 0.06);
-  border-color: rgba(91, 184, 217, 0.4);
-  color: #6fc8e6;
-}
-.profile-delete-btn {
-  width: 48px;
 }
 
 .state-row {

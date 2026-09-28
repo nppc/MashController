@@ -37,17 +37,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-/* TRASH ICON SVG HELPER - Single source of truth for delete button icon */
-/* Used by: Step delete buttons (dynamic), and inline in HTML for profile delete button */
-function getTrashIconSVG() {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 6h18"/>
-    <path d="M8 6V4h8v2"/>
-    <path d="M19 6l-1 14H6L5 6"/>
-    <path d="M10 11v6"/>
-    <path d="M14 11v6"/>
-  </svg>`;
-}
 
 /* CONTROLLER STATUS AND PROCESS */
 let controllerStatus = {
@@ -469,7 +458,7 @@ let currentProfileIndex = 0;
 /* Load profiles from server */
 async function loadProfiles() {
   try {
-    const res = await fetch('profiles_data.json');
+    const res = await fetch('profiles_data');
     const data = await res.json();
     profiles = data.profiles || [];
 
@@ -555,10 +544,9 @@ function renderSteps() {
 			<span class="profile-step-number">
 				Step ${idx + 1}
 			</span>
-
-			<button class="btn-trash"
+  			<button class="btn-icon profile-delete-btn" 
 				onclick="removeStep(${idx})">
-				${getTrashIconSVG()}
+				${Icons.trash}
 			</button>
 		</div>
 

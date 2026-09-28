@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Mash Controller</title>
+  <script src="icons.js"></script>
   <script src="chart.js"></script>
 
   <link rel="stylesheet" href="style.css">
@@ -143,32 +144,14 @@
 						</div>
 					</div>
 
-				  <button class="btn profile-add-btn" onclick="addProfile()">
-					<span style="font-size:16px; line-height:0;">✚</span>
-				  </button>
+				  <button id="profile-add-btn-id" class="btn-icon profile-add-btn" onclick="addProfile()"></button>
 
-				<!-- SVG matches getTrashIconSVG() helper function -->
-					  <button class="btn-trash profile-delete-btn" onclick="deleteProfile()">
-						<svg
-						  xmlns="http://www.w3.org/2000/svg"
-						  width="20"
-						  height="20"
-						  viewBox="0 0 24 24"
-						  fill="none"
-						  stroke="currentColor"
-						  stroke-width="2"
-						  stroke-linecap="round"
-						  stroke-linejoin="round"
-						>
-						  <path d="M3 6h18"/>
-						  <path d="M8 6V4h8v2"/>
-						  <path d="M19 6l-1 14H6L5 6"/>
-						  <path d="M10 11v6"/>
-						  <path d="M14 11v6"/>
-						</svg>
-					  </button>
+					  <button id="profile-delete-btn-id" class="btn-icon profile-delete-btn" onclick="deleteProfile()"></button>
 				</div>
-					   
+				<script>
+					document.getElementById("profile-delete-btn-id").innerHTML = Icons.trash;
+					document.getElementById("profile-add-btn-id").innerHTML = Icons.plus;
+				</script>					   
 				
 			</div>
 
