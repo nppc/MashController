@@ -226,6 +226,32 @@ struct LegacyV11EepromDataEE {
   uint32_t             crc;
 };
 
+// Layout of version 12 (before targetReachedHystC / alertSoundEnabled were added).
+struct LegacyV12SettingsEE {
+  char     wifiSSID[STORAGE_SSID_LEN];
+  char     wifiPass[STORAGE_PASS_LEN];
+  float    heaterPowerW;
+  float    heaterPowerEffW;
+  float    heaterTauSec;
+  float    heaterStoreGain;
+  float    heaterLossWPerC;
+  float    heaterAmbientC;
+  float    heaterDeadband;
+  uint16_t heaterMinSwitchSec;
+  uint8_t  mixerRestSec;
+  uint8_t  mixerOnSec;
+  uint16_t coolDownSec;
+};
+
+struct LegacyV12EepromDataEE {
+  uint32_t             magic;
+  uint16_t             version;
+  LegacyV12SettingsEE  settings;
+  uint8_t              profileCount;
+  ProfileEE            profiles[STORAGE_MAX_PROFILES];
+  uint32_t             crc;
+};
+
 // Uncalibrated starting point for a 2 kW under-base element; run the
 // Heater Calibration page to replace these with measured values.
 void applyHeaterDefaults(SettingsEE &s) {
@@ -235,6 +261,11 @@ void applyHeaterDefaults(SettingsEE &s) {
   s.heaterStoreGain = 1.2f;
   s.heaterLossWPerC = 5.0f;
   s.heaterAmbientC = 20.0f;
+
+  // Not heater values, but seeded here because every migration path and
+  // loadDefaults() already call this helper.
+  s.targetReachedHystC = 0.5f;   // was hardcoded in mashProfileTick()
+  s.alertSoundEnabled = true;
 }
 }
 
@@ -511,6 +542,46 @@ bool Storage::begin() {
       memcpy(_data.profiles, legacyV11.profiles,
              sizeof(ProfileEE) * _data.profileCount);
       Serial.println("Storage: migrated version 11 heater model");
+      save();
+      return true;
+    }
+    }
+
+    {
+    LegacyV12EepromDataEE legacyV12;
+    EEPROM.get(0, legacyV12);
+    uint32_t legacyV12Calc = crc32(
+        (uint8_t*)&legacyV12,
+        sizeof(LegacyV12EepromDataEE) - sizeof(legacyV12.crc));
+
+    if (legacyV12.magic == STORAGE_MAGIC && legacyV12.version == 12 &&
+        legacyV12.crc == legacyV12Calc) {
+      memset(&_data, 0, sizeof(_data));
+      _data.magic = STORAGE_MAGIC;
+      _data.version = STORAGE_VERSION;
+      strncpy(_data.settings.wifiSSID, legacyV12.settings.wifiSSID,
+              STORAGE_SSID_LEN - 1);
+      strncpy(_data.settings.wifiPass, legacyV12.settings.wifiPass,
+              STORAGE_PASS_LEN - 1);
+      // New fields (target-reached tolerance, sound alerts) get their
+      // defaults here; the copies below override everything that existed.
+      applyHeaterDefaults(_data.settings);
+      _data.settings.heaterPowerW = legacyV12.settings.heaterPowerW;
+      _data.settings.heaterPowerEffW = legacyV12.settings.heaterPowerEffW;
+      _data.settings.heaterTauSec = legacyV12.settings.heaterTauSec;
+      _data.settings.heaterStoreGain = legacyV12.settings.heaterStoreGain;
+      _data.settings.heaterLossWPerC = legacyV12.settings.heaterLossWPerC;
+      _data.settings.heaterAmbientC = legacyV12.settings.heaterAmbientC;
+      _data.settings.heaterDeadband = legacyV12.settings.heaterDeadband;
+      _data.settings.heaterMinSwitchSec = legacyV12.settings.heaterMinSwitchSec;
+      _data.settings.mixerRestSec = legacyV12.settings.mixerRestSec;
+      _data.settings.mixerOnSec = legacyV12.settings.mixerOnSec;
+      _data.settings.coolDownSec = legacyV12.settings.coolDownSec;
+      _data.profileCount = min(legacyV12.profileCount,
+                               (uint8_t)STORAGE_MAX_PROFILES);
+      memcpy(_data.profiles, legacyV12.profiles,
+             sizeof(ProfileEE) * _data.profileCount);
+      Serial.println("Storage: migrated version 12 settings");
       save();
       return true;
     }

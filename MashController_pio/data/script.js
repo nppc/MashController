@@ -38,6 +38,197 @@ document.addEventListener('keydown', (e) => {
 });
 
 
+/* ALERT SOUND: gentle chime when a manual Pause step reaches its target temperature */
+const ALERT_REPEAT_MS = 20000;   // repeat the chime while waiting for RESUME; 0 = play once
+const BASE_TITLE = document.title;
+let alertAudioCtx = null;
+let alertTimer = null;
+let titleTimer = null;
+let prevWaitingForUser = false;
+let audioWasLocked = true;
+let alertSoundEnabled = false;   // global ON/OFF from the controller; unknown (= silent) until the first status arrives
+let pendingReturnChime = false;
+
+function getAlertAudioContext() {
+  if (!alertAudioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    alertAudioCtx = new Ctx();
+    audioWasLocked = alertAudioCtx.state !== 'running';
+    alertAudioCtx.onstatechange = noteAudioState;
+  }
+  return alertAudioCtx;
+}
+
+function tryResume(ctx) {
+  try {
+    const p = ctx.resume();
+    if (p && p.then) p.then(noteAudioState, () => {});
+  } catch (e) {}
+}
+
+// Runs whenever the audio state may have changed. Each time audio goes
+// from locked to unlocked, a chime confirms it (the flag prevents doubles).
+function noteAudioState() {
+  const ctx = alertAudioCtx;
+  if (!ctx) return;
+  if (ctx.state !== 'running') {
+    audioWasLocked = true;
+  } else if (audioWasLocked) {
+    audioWasLocked = false;
+    playUnlockSound();
+  }
+  updateSoundBanner();
+}
+
+// Missed alert -> the full three-note chime. Otherwise a short two-note "ding-dong".
+function playUnlockSound() {
+  if (prevWaitingForUser) playAlertChime();
+  else playNotes([659.25, 987.77]);
+}
+
+// Browsers keep audio locked until the user interacts with the page
+// (after every refresh and every page change), so unlock the shared
+// context on the first click / tap / key press.
+function unlockAlertAudio() {
+  const ctx = getAlertAudioContext();
+  if (ctx && ctx.state !== 'running') tryResume(ctx);
+}
+// capture phase: still fires when a handler (e.g. the menu button) calls stopPropagation()
+['click', 'touchend', 'keydown'].forEach(ev =>
+  document.addEventListener(ev, unlockAlertAudio, { passive: true, capture: true })
+);
+
+// Yellow bar at the top: shown only while a mash is running AND audio is blocked
+function updateSoundBanner() {
+  const banner = document.getElementById('soundBanner');
+  if (!banner) return;
+
+  const ctx = getAlertAudioContext();
+  const blocked = !!ctx && ctx.state !== 'running';
+  const show = alertSoundEnabled && blocked && !!controllerStatus.running;
+  const urgent = show && prevWaitingForUser;   // target already reached, chime could not play
+
+  banner.classList.toggle('hidden', !show);
+  banner.classList.toggle('urgent', urgent);
+  banner.textContent = urgent
+    ? '🔔 Target reached, but sound is blocked. Tap here to enable it.'
+    : '🔔 Sound alerts are off. Tap here to enable.';
+}
+
+// The bar's own tap handler (any other tap unlocks audio too)
+function enableAlertSound() {
+  const ctx = getAlertAudioContext();
+  if (ctx) tryResume(ctx);
+}
+
+// Sine tones with a bell-like decay. Returns false if the browser is blocking audio.
+function playNotes(notes, force) {
+  if (!alertSoundEnabled && !force) return false;   // Sound Alerts switched off in Settings
+  const ctx = getAlertAudioContext();
+  if (!ctx) return false;
+  if (ctx.state !== 'running') {
+    tryResume(ctx);
+    return false;   // don't schedule: it would play late, all at once, after unlocking
+  }
+
+  const partials = [[1, 0.22], [2, 0.05]];   // [frequency multiple, peak gain]
+  const start = ctx.currentTime + 0.05;
+
+  notes.forEach((freq, i) => {
+    const t = start + i * 0.22;
+    partials.forEach(([mult, peak]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * mult, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1.1);
+    });
+  });
+  return true;
+}
+
+// Soft three-note rising chime: E5 - G#5 - B5
+function playAlertChime() {
+  return playNotes([659.25, 830.61, 987.77]);
+}
+
+// Flash the browser tab title too: helps when the tab is in the background
+function setTitleFlash(on) {
+  clearInterval(titleTimer);
+  titleTimer = null;
+  document.title = BASE_TITLE;
+  if (!on) return;
+
+  let alt = false;
+  titleTimer = setInterval(() => {
+    alt = !alt;
+    document.title = alt ? '⏸ RESUME needed' : BASE_TITLE;
+  }, 1000);
+}
+
+// Called from every status poll; reacts only to the false -> true edge
+function handleAttentionAlert(st) {
+  if (typeof st.alertSound === 'boolean') alertSoundEnabled = st.alertSound;
+  const waiting = !!(st.running && st.waitingForUser);
+
+  // Deferred from page load until we know whether sound is enabled
+  if (pendingReturnChime) {
+    pendingReturnChime = false;
+    playNotes([659.25, 987.77]);
+  }
+
+  if (waiting && !prevWaitingForUser) {
+    prevWaitingForUser = true;
+    playAlertChime();
+    setTitleFlash(true);
+    if (ALERT_REPEAT_MS > 0) {
+      clearInterval(alertTimer);
+      alertTimer = setInterval(playAlertChime, ALERT_REPEAT_MS);
+    }
+  } else if (!waiting && prevWaitingForUser) {
+    // RESUME pressed, step skipped, or mash stopped
+    clearInterval(alertTimer);
+    alertTimer = null;
+    setTitleFlash(false);
+  }
+
+  prevWaitingForUser = waiting;
+  updateSoundBanner();
+}
+
+// True when this page load came from a link on the calibration page (not a refresh)
+function cameFromCalibration() {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0];
+    return /calibration/i.test(document.referrer) && !(nav && nav.type === 'reload');
+  } catch (e) {
+    return false;
+  }
+}
+
+// Create the context now so a blocked state is detected right after a refresh.
+getAlertAudioContext();
+
+// Returning from the calibration page: play the chime with the first status poll if the
+// browser allows it; if it is blocked, the first tap unlocks audio and plays the chime then.
+pendingReturnChime = cameFromCalibration();
+
+// Settings switch: let the user hear the sound when turning it on (before it is saved)
+function previewAlertSound(on) {
+  if (!on) return;
+  const ctx = getAlertAudioContext();
+  if (!ctx) return;
+  Promise.resolve(ctx.resume()).then(() => playNotes([659.25, 987.77], true), () => {});
+}
+
+
 /* CONTROLLER STATUS AND PROCESS */
 let controllerStatus = {
   running: false,
@@ -54,6 +245,8 @@ async function updateStatus() {
     const st = await res.json();
 
     controllerStatus = st;
+
+    handleAttentionAlert(st);
 
     updateProcessUI(st);
 
@@ -905,6 +1098,12 @@ async function loadSettings() {
 		document.getElementById('setCoolDownSec').value =
 			settings.coolDownSec ?? 180;
 
+		document.getElementById('setTargetReachedHystC').value =
+			Number(settings.targetReachedHystC ?? 0.5).toFixed(1);
+
+		document.getElementById('setAlertSound').checked =
+			settings.alertSoundEnabled ?? true;
+
 		renderSensorInfo(settings);
 
     } catch (e) {
@@ -1024,6 +1223,12 @@ async function saveSettings() {
 			coolDownSec: parseInt(
 				document.getElementById('setCoolDownSec').value
 			),
+
+			targetReachedHystC: parseFloat(
+				document.getElementById('setTargetReachedHystC').value
+			),
+
+			alertSoundEnabled: document.getElementById('setAlertSound').checked,
 
             wifiSSID: document.getElementById('setWifiSsid').value,
 

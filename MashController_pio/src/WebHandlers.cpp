@@ -227,6 +227,8 @@ static void handleGetSettings() {
   doc["mixerOnSec"] = s.mixerOnSec;
   doc["mixerRestSec"] = s.mixerRestSec;
   doc["coolDownSec"] = s.coolDownSec;
+  doc["targetReachedHystC"] = s.targetReachedHystC;
+  doc["alertSoundEnabled"] = s.alertSoundEnabled;
 
   // Read-only DS18B20 info
   doc["sensorAddress"] = sensorAddressToString();
@@ -308,6 +310,13 @@ static void handleSaveSettings() {
 
   if (doc.containsKey("coolDownSec")) {
     s.coolDownSec = doc["coolDownSec"].as<uint16_t>();
+  }
+
+  if (doc["targetReachedHystC"].is<float>()) {
+    s.targetReachedHystC = constrain(doc["targetReachedHystC"].as<float>(), 0.0f, 5.0f);
+  }
+  if (doc["alertSoundEnabled"].is<bool>()) {
+    s.alertSoundEnabled = doc["alertSoundEnabled"].as<bool>();
   }
 
   if (!storage.save()) {
@@ -576,6 +585,7 @@ static void handleStatus() {
   doc["calibrationActive"] = calibrationIsActive();
   doc["paused"] = isPaused;
   doc["waitingForUser"] = waitingForUser;
+  doc["alertSound"] = storage.settings().alertSoundEnabled;
   doc["profileName"] = activeProfile.name;
   doc["waterMassKg"] = activeProfile.waterMassKg;
   doc["grainMassKg"] = activeProfile.grainMassKg;

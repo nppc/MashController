@@ -107,7 +107,9 @@ void mashProfileTick() {
 
   // If waiting for temperature -> check if we reached it
   if (waitingForTemp) {
-    if (currentTemp >= targetTemperature - 0.5) {   // tolerance
+    // A step counts as reached this many degrees below target (Settings)
+    const float toleranceC = storage.settings().targetReachedHystC;
+    if (currentTemp >= targetTemperature - toleranceC) {
       waitingForTemp = false;
       if (activeProfile.steps[currentStep].time == 0) {
         isPaused = true;

@@ -15,7 +15,7 @@
 #define STORAGE_PASS_LEN     24
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      12            // bump if the struct layout changes
+#define STORAGE_VERSION      13            // bump if the struct layout changes
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
@@ -48,6 +48,8 @@ struct SettingsEE {
   uint8_t  mixerRestSec;         // length of the rest period
   uint8_t  mixerOnSec;           // seconds of mixerDurationSec the motor runs
   uint16_t coolDownSec;          // seconds mixer runs after profile completes
+  float    targetReachedHystC;   // a step counts as reached at target minus this many degrees C
+  bool     alertSoundEnabled;    // browser plays the alert chime when a manual Pause step is ready
 };
 
 struct EepromDataEE {

@@ -32,6 +32,13 @@
 	  <span class="status-dot" id="statusDot"></span>
 	</div>
 
+	<!-- Sound-alert warning (shown only while a mash runs and the browser blocks audio) -->
+	<div class="sound-banner hidden" id="soundBanner" role="button" tabindex="0"
+		 onclick="enableAlertSound()"
+		 onkeydown="if (event.key === 'Enter' || event.key === ' ') enableAlertSound()">
+	  🔔 Sound alerts are off. Tap here to enable.
+	</div>
+
 	<!-- MAIN SCREEN -->
 	<div id="main" class="screen active">
 
@@ -287,6 +294,17 @@
 				   step="1" min="0" max="600">
 		  </div>
 
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Target Reached Tolerance</div>
+			  <div class="setting-desc">
+				A step counts as reached when the temperature is within this many °C below its target.
+			  </div>
+			</div>
+			<input id="setTargetReachedHystC" class="input-small" type="number"
+				   step="0.1" min="0" max="5">
+		  </div>
+
 		</div>
 	  </div>
 
@@ -345,6 +363,27 @@
 
 		</div>
 	  </div>
+	  <div class="stat-card">
+		<div class="label">Alerts</div>
+
+		<div class="settings-group">
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Sound Alerts</div>
+			  <div class="setting-desc">
+				Play a chime in the browser when a manual Pause step is ready. Applies to every device.
+			  </div>
+			</div>
+			<label class="switch">
+			  <input id="setAlertSound" type="checkbox" onchange="previewAlertSound(this.checked)">
+			  <span class="switch-track"></span>
+			</label>
+		  </div>
+
+		</div>
+	  </div>
+
 	  <div class="stat-card">
 		<div class="label">Temperature Sensor</div>
 
