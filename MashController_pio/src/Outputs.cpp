@@ -102,10 +102,14 @@ void applyOutputs() {
     }
 
     const uint32_t elapsed = millis() - mixerStartTime;
-    const uint32_t duty = elapsed >= MIXER_RAMP_TIME_MS
-                              ? 0 // ramp finished: full speed
-                              : MIXER_START_DUTY -
-                                  (MIXER_START_DUTY * elapsed) / MIXER_RAMP_TIME_MS;
+    uint32_t duty = 0; // ramp finished: full speed
+    if (elapsed < MIXER_RAMP_TIME_MS) {
+      // Quadratic ease-in on speed (duty is inverted):
+      // duty = START - START * elapsed^2 / T^2
+      duty = MIXER_START_DUTY -
+             (MIXER_START_DUTY * elapsed * elapsed) /
+                 (MIXER_RAMP_TIME_MS * MIXER_RAMP_TIME_MS);
+    }
     analogWrite(MIXER_PIN, duty);
   }
 }
