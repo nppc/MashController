@@ -42,190 +42,37 @@
  *   copy and call setProfile() to write it back - then storage.save() to
  *   persist, same as settings.
  *
+
  * ADDING A NEW SETTING FIELD:
  *   1. Add the field to `SettingsEE` in Storage.h.
- *   2. Give it a sane default in applyHeaterDefaults() (heater-related) or
- *      directly in Storage::loadDefaults() (everything else).
- *   3. If this changes the struct's layout/size, bump STORAGE_VERSION and
- *      add a LegacyVxxSettingsEE snapshot + migration block in begin(),
- *      following the existing Legacy* chain above - otherwise old EEPROM
- *      contents fail the CRC/version check and get wiped to defaults
- *      instead of migrated.
+ *   2. Give it a sane default in applyHeaterDefaults() (heater-related),
+ *      applyMixerDefaults() (mixer/cool-down) or directly in
+ *      Storage::loadDefaults() (everything else). Every migration and
+ *      loadDefaults() call these helpers first, so a field defaulted there
+ *      never ends up as 0 after a memset().
+ *   3. If this changes the struct's layout/size, bump STORAGE_VERSION.
+ *      The static_assert next to LegacyV12SettingsEE will fail the build
+ *      until you:
+ *        (a) copy the OLD SettingsEE into a new LegacyV<old>SettingsEE /
+ *            LegacyV<old>EepromDataEE pair,
+ *        (b) delete the previous Legacy struct pair,
+ *        (c) update STORAGE_PREVIOUS_VERSION in Storage.h,
+ *        (d) rewrite the migration block in begin() for the new legacy
+ *            struct (call the apply*Defaults() helpers, then copy over
+ *            every field that existed before).
+ *      POLICY: only ONE previous version is migrated. Anything older is
+ *      reset to defaults by loadDefaults().
+ *      If ProfileEE itself changes, also snapshot the old profile struct
+ *      inside the Legacy pair (see how LegacyV10ProfileEE used to be done),
+ *      because the Legacy layout embeds ProfileEE.
  * ==========================================================================
  */
 
 Storage storage;
 
 namespace {
-struct LegacySettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterHysteresis;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
 
-struct LegacyEepromDataEE {
-  uint32_t       magic;
-  uint16_t       version;
-  LegacySettingsEE settings;
-  uint8_t        profileCount;
-  ProfileEE      profiles[STORAGE_MAX_PROFILES];
-  uint32_t       crc;
-};
-
-struct LegacySplitSettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterOffHysteresis;
-  float    heaterOnHysteresis;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacySplitEepromDataEE {
-  uint32_t             magic;
-  uint16_t             version;
-  LegacySplitSettingsEE settings;
-  uint8_t              profileCount;
-  ProfileEE            profiles[STORAGE_MAX_PROFILES];
-  uint32_t             crc;
-};
-
-struct LegacyV9SettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  uint16_t heaterOffPredictionSec;
-  uint16_t heaterOnPredictionSec;
-  float    heaterDeadband;
-  uint16_t heaterMinSwitchSec;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacyV9EepromDataEE {
-  uint32_t             magic;
-  uint16_t             version;
-  LegacyV9SettingsEE   settings;
-  uint8_t              profileCount;
-  ProfileEE            profiles[STORAGE_MAX_PROFILES];
-  uint32_t             crc;
-};
-
-struct LegacyV10ProfileEE {
-  char    name[STORAGE_NAME_LEN];
-  uint8_t stepCount;
-  StepEE  steps[STORAGE_MAX_STEPS];
-};
-
-struct LegacyV10SettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    waterMassKg;
-  float    grainMassKg;
-  float    heaterTransferCoeff;
-  float    heaterThermalMass;
-  float    heaterDeadband;
-  uint16_t heaterMinSwitchSec;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacyV10EepromDataEE {
-  uint32_t             magic;
-  uint16_t             version;
-  LegacyV10SettingsEE  settings;
-  uint8_t              profileCount;
-  LegacyV10ProfileEE   profiles[STORAGE_MAX_PROFILES];
-  uint32_t             crc;
-};
-
-struct LegacyMarginSettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterOffMargin;
-  float    heaterOnMargin;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacyMarginEepromDataEE {
-  uint32_t             magic;
-  uint16_t             version;
-  LegacyMarginSettingsEE settings;
-  uint8_t              profileCount;
-  ProfileEE            profiles[STORAGE_MAX_PROFILES];
-  uint32_t             crc;
-};
-
-struct LegacyPredictiveSettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterPredictionSec;
-  float    heaterDeadband;
-  uint16_t heaterMinSwitchSec;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacyPredictiveEepromDataEE {
-  uint32_t                 magic;
-  uint16_t                 version;
-  LegacyPredictiveSettingsEE settings;
-  uint8_t                  profileCount;
-  ProfileEE                profiles[STORAGE_MAX_PROFILES];
-  uint32_t                 crc;
-};
-
-struct LegacyAsymmetricSettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterOffPredictionSec;
-  float    heaterOnPredictionSec;
-  float    heaterDeadband;
-  uint16_t heaterMinSwitchSec;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacyAsymmetricEepromDataEE {
-  uint32_t                 magic;
-  uint16_t                 version;
-  LegacyAsymmetricSettingsEE settings;
-  uint8_t                  profileCount;
-  ProfileEE                profiles[STORAGE_MAX_PROFILES];
-  uint32_t                 crc;
-};
-
-struct LegacyV11SettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
-  float    heaterTransferCoeff;
-  float    heaterThermalMass;
-  float    heaterPowerW;
-  float    heaterDeadband;
-  uint16_t heaterMinSwitchSec;
-  uint8_t  mixerRestSec;
-  uint8_t  mixerOnSec;
-  uint16_t coolDownSec;
-};
-
-struct LegacyV11EepromDataEE {
-  uint32_t             magic;
-  uint16_t             version;
-  LegacyV11SettingsEE  settings;
-  uint8_t              profileCount;
-  ProfileEE            profiles[STORAGE_MAX_PROFILES];
-  uint32_t             crc;
-};
-
+// ---- Previous layout (version STORAGE_PREVIOUS_VERSION) -------------------
 // Layout of version 12 (before targetReachedHystC / alertSoundEnabled were added).
 struct LegacyV12SettingsEE {
   char     wifiSSID[STORAGE_SSID_LEN];
@@ -252,6 +99,16 @@ struct LegacyV12EepromDataEE {
   uint32_t             crc;
 };
 
+// Build breaks here when STORAGE_VERSION is bumped without updating the
+// migration. See "ADDING A NEW SETTING FIELD" at the top of this file.
+static_assert(STORAGE_VERSION == STORAGE_PREVIOUS_VERSION + 1,
+              "STORAGE_VERSION was bumped: snapshot the old SettingsEE as "
+              "LegacyV<old>SettingsEE, update STORAGE_PREVIOUS_VERSION, "
+              "migrate it in begin(), and delete the older Legacy struct.");
+static_assert(STORAGE_PREVIOUS_VERSION == 12,
+              "STORAGE_PREVIOUS_VERSION no longer matches LegacyV12* - "
+              "rename/replace the Legacy struct and migration block.");
+
 // Uncalibrated starting point for a 2 kW under-base element; run the
 // Heater Calibration page to replace these with measured values.
 void applyHeaterDefaults(SettingsEE &s) {
@@ -261,11 +118,19 @@ void applyHeaterDefaults(SettingsEE &s) {
   s.heaterStoreGain = 1.2f;
   s.heaterLossWPerC = 5.0f;
   s.heaterAmbientC = 20.0f;
+  s.heaterDeadband = 0.1f;
+  s.heaterMinSwitchSec = 10;
 
   // Not heater values, but seeded here because every migration path and
   // loadDefaults() already call this helper.
   s.targetReachedHystC = 0.5f;   // was hardcoded in mashProfileTick()
   s.alertSoundEnabled = true;
+}
+
+void applyMixerDefaults(SettingsEE &s) {
+  s.mixerRestSec = 15;
+  s.mixerOnSec   = 5;
+  s.coolDownSec  = 180;   // 3 minutes default
 }
 }
 
@@ -277,284 +142,14 @@ bool Storage::begin() {
   uint32_t calc = crc32((uint8_t*)&_data, sizeof(EepromDataEE) - sizeof(_data.crc));
 
   if (_data.magic != STORAGE_MAGIC || _data.version != STORAGE_VERSION || storedCrc != calc) {
-    {
-    LegacyEepromDataEE legacy;
-    EEPROM.get(0, legacy);
-    uint32_t legacyCalc = crc32((uint8_t*)&legacy,
-                                sizeof(LegacyEepromDataEE) - sizeof(legacy.crc));
-
-    if (legacy.magic == STORAGE_MAGIC && legacy.version == 4 &&
-        legacy.crc == legacyCalc) {
-      memset(&_data, 0, sizeof(_data));
-      _data.magic = STORAGE_MAGIC;
-      _data.version = STORAGE_VERSION;
-      strncpy(_data.settings.wifiSSID, legacy.settings.wifiSSID,
-              STORAGE_SSID_LEN - 1);
-      strncpy(_data.settings.wifiPass, legacy.settings.wifiPass,
-              STORAGE_PASS_LEN - 1);
-      applyHeaterDefaults(_data.settings);
-      _data.settings.heaterDeadband = 0.1f;
-      _data.settings.heaterMinSwitchSec = 10;
-      _data.settings.mixerRestSec = legacy.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacy.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacy.settings.coolDownSec;
-      _data.profileCount = min(legacy.profileCount,
-                               (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacy.profiles,
-             sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 4 settings");
-      save();
-      return true;
-    }
-    }
-
-    {
-    LegacySplitEepromDataEE legacySplit;
-    EEPROM.get(0, legacySplit);
-    uint32_t legacySplitCalc = crc32(
-        (uint8_t*)&legacySplit,
-        sizeof(LegacySplitEepromDataEE) - sizeof(legacySplit.crc));
-
-    if (legacySplit.magic == STORAGE_MAGIC && legacySplit.version == 5 &&
-        legacySplit.crc == legacySplitCalc) {
-      memset(&_data, 0, sizeof(_data));
-      _data.magic = STORAGE_MAGIC;
-      _data.version = STORAGE_VERSION;
-      strncpy(_data.settings.wifiSSID, legacySplit.settings.wifiSSID,
-              STORAGE_SSID_LEN - 1);
-      strncpy(_data.settings.wifiPass, legacySplit.settings.wifiPass,
-              STORAGE_PASS_LEN - 1);
-      applyHeaterDefaults(_data.settings);
-      _data.settings.heaterDeadband = 0.1f;
-      _data.settings.heaterMinSwitchSec = 10;
-      _data.settings.mixerRestSec = legacySplit.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacySplit.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacySplit.settings.coolDownSec;
-      _data.profileCount = min(legacySplit.profileCount,
-                               (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacySplit.profiles,
-             sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 5 heater margins");
-      save();
-      return true;
-    }
-    }
-
-    {
-    LegacyMarginEepromDataEE legacyMargin;
-    EEPROM.get(0, legacyMargin);
-    uint32_t legacyMarginCalc = crc32(
-        (uint8_t*)&legacyMargin,
-        sizeof(LegacyMarginEepromDataEE) - sizeof(legacyMargin.crc));
-
-    if (legacyMargin.magic == STORAGE_MAGIC && legacyMargin.version == 6 &&
-        legacyMargin.crc == legacyMarginCalc) {
-      memset(&_data, 0, sizeof(_data));
-      _data.magic = STORAGE_MAGIC;
-      _data.version = STORAGE_VERSION;
-      strncpy(_data.settings.wifiSSID, legacyMargin.settings.wifiSSID,
-              STORAGE_SSID_LEN - 1);
-      strncpy(_data.settings.wifiPass, legacyMargin.settings.wifiPass,
-              STORAGE_PASS_LEN - 1);
-      applyHeaterDefaults(_data.settings);
-      _data.settings.heaterDeadband = 0.1f;
-      _data.settings.heaterMinSwitchSec = 10;
-      _data.settings.mixerRestSec = legacyMargin.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacyMargin.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacyMargin.settings.coolDownSec;
-      _data.profileCount = min(legacyMargin.profileCount,
-                               (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacyMargin.profiles,
-             sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 6 heater margins");
-      save();
-      return true;
-    }
-    }
-
-    {
-      LegacyPredictiveEepromDataEE legacyPredictive;
-      EEPROM.get(0, legacyPredictive);
-      uint32_t legacyPredictiveCalc = crc32(
-        (uint8_t*)&legacyPredictive,
-        sizeof(LegacyPredictiveEepromDataEE) - sizeof(legacyPredictive.crc));
-
-      if (legacyPredictive.magic == STORAGE_MAGIC &&
-        legacyPredictive.version == 7 &&
-        legacyPredictive.crc == legacyPredictiveCalc) {
-        memset(&_data, 0, sizeof(_data));
-        _data.magic = STORAGE_MAGIC;
-        _data.version = STORAGE_VERSION;
-        strncpy(_data.settings.wifiSSID, legacyPredictive.settings.wifiSSID,
-            STORAGE_SSID_LEN - 1);
-        strncpy(_data.settings.wifiPass, legacyPredictive.settings.wifiPass,
-            STORAGE_PASS_LEN - 1);
-          applyHeaterDefaults(_data.settings);
-        _data.settings.heaterDeadband = legacyPredictive.settings.heaterDeadband;
-        _data.settings.heaterMinSwitchSec =
-          legacyPredictive.settings.heaterMinSwitchSec;
-        _data.settings.mixerRestSec = legacyPredictive.settings.mixerRestSec;
-        _data.settings.mixerOnSec = legacyPredictive.settings.mixerOnSec;
-        _data.settings.coolDownSec = legacyPredictive.settings.coolDownSec;
-        _data.profileCount = min(legacyPredictive.profileCount,
-                     (uint8_t)STORAGE_MAX_PROFILES);
-        memcpy(_data.profiles, legacyPredictive.profiles,
-           sizeof(ProfileEE) * _data.profileCount);
-        Serial.println("Storage: migrated version 7 predictive settings");
-        save();
-        return true;
-      }
-    }
-
-    {
-      LegacyAsymmetricEepromDataEE legacyAsymmetric;
-      EEPROM.get(0, legacyAsymmetric);
-      uint32_t legacyAsymmetricCalc = crc32(
-          (uint8_t*)&legacyAsymmetric,
-          sizeof(LegacyAsymmetricEepromDataEE) - sizeof(legacyAsymmetric.crc));
-
-      if (legacyAsymmetric.magic == STORAGE_MAGIC &&
-          legacyAsymmetric.version == 8 &&
-          legacyAsymmetric.crc == legacyAsymmetricCalc) {
-        memset(&_data, 0, sizeof(_data));
-        _data.magic = STORAGE_MAGIC;
-        _data.version = STORAGE_VERSION;
-        strncpy(_data.settings.wifiSSID, legacyAsymmetric.settings.wifiSSID,
-                STORAGE_SSID_LEN - 1);
-        strncpy(_data.settings.wifiPass, legacyAsymmetric.settings.wifiPass,
-                STORAGE_PASS_LEN - 1);
-        applyHeaterDefaults(_data.settings);
-        _data.settings.heaterDeadband = legacyAsymmetric.settings.heaterDeadband;
-        _data.settings.heaterMinSwitchSec =
-            legacyAsymmetric.settings.heaterMinSwitchSec;
-        _data.settings.mixerRestSec = legacyAsymmetric.settings.mixerRestSec;
-        _data.settings.mixerOnSec = legacyAsymmetric.settings.mixerOnSec;
-        _data.settings.coolDownSec = legacyAsymmetric.settings.coolDownSec;
-        _data.profileCount = min(legacyAsymmetric.profileCount,
-                                 (uint8_t)STORAGE_MAX_PROFILES);
-        memcpy(_data.profiles, legacyAsymmetric.profiles,
-               sizeof(ProfileEE) * _data.profileCount);
-        Serial.println("Storage: migrated version 8 integer horizons");
-        save();
-        return true;
-      }
-    }
-
-    {
-    LegacyV9EepromDataEE legacyV9;
-    EEPROM.get(0, legacyV9);
-    uint32_t legacyV9Calc = crc32(
-        (uint8_t*)&legacyV9,
-        sizeof(LegacyV9EepromDataEE) - sizeof(legacyV9.crc));
-
-    if (legacyV9.magic == STORAGE_MAGIC && legacyV9.version == 9 &&
-        legacyV9.crc == legacyV9Calc) {
-      memset(&_data, 0, sizeof(_data));
-      _data.magic = STORAGE_MAGIC;
-      _data.version = STORAGE_VERSION;
-      strncpy(_data.settings.wifiSSID, legacyV9.settings.wifiSSID,
-              STORAGE_SSID_LEN - 1);
-      strncpy(_data.settings.wifiPass, legacyV9.settings.wifiPass,
-              STORAGE_PASS_LEN - 1);
-      applyHeaterDefaults(_data.settings);
-      _data.settings.heaterDeadband = legacyV9.settings.heaterDeadband;
-      _data.settings.heaterMinSwitchSec = legacyV9.settings.heaterMinSwitchSec;
-      _data.settings.mixerRestSec = legacyV9.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacyV9.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacyV9.settings.coolDownSec;
-      _data.profileCount = min(legacyV9.profileCount,
-                               (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacyV9.profiles,
-             sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 9 predictive settings");
-      save();
-      return true;
-    }
-    }
-
-    {
-    LegacyV10EepromDataEE legacyV10;
-    EEPROM.get(0, legacyV10);
-    uint32_t legacyV10Calc = crc32(
-        (uint8_t*)&legacyV10,
-        sizeof(LegacyV10EepromDataEE) - sizeof(legacyV10.crc));
-
-    if (legacyV10.magic == STORAGE_MAGIC && legacyV10.version == 10 &&
-        legacyV10.crc == legacyV10Calc) {
-      memset(&_data, 0, sizeof(_data));
-      _data.magic = STORAGE_MAGIC;
-      _data.version = STORAGE_VERSION;
-            strncpy(_data.settings.wifiSSID, legacyV10.settings.wifiSSID,
-              STORAGE_SSID_LEN - 1);
-            strncpy(_data.settings.wifiPass, legacyV10.settings.wifiPass,
-              STORAGE_PASS_LEN - 1);
-      applyHeaterDefaults(_data.settings);
-            _data.settings.heaterDeadband = legacyV10.settings.heaterDeadband;
-            _data.settings.heaterMinSwitchSec = legacyV10.settings.heaterMinSwitchSec;
-            _data.settings.mixerRestSec = legacyV10.settings.mixerRestSec;
-            _data.settings.mixerOnSec = legacyV10.settings.mixerOnSec;
-            _data.settings.coolDownSec = legacyV10.settings.coolDownSec;
-      _data.profileCount = min(legacyV10.profileCount,
-                               (uint8_t)STORAGE_MAX_PROFILES);
-      for (uint8_t i = 0; i < _data.profileCount; i++) {
-        strncpy(_data.profiles[i].name, legacyV10.profiles[i].name,
-                STORAGE_NAME_LEN - 1);
-        _data.profiles[i].stepCount = legacyV10.profiles[i].stepCount;
-        _data.profiles[i].waterMassKg = legacyV10.settings.waterMassKg;
-        _data.profiles[i].grainMassKg = legacyV10.settings.grainMassKg;
-        memcpy(_data.profiles[i].steps, legacyV10.profiles[i].steps,
-               sizeof(_data.profiles[i].steps));
-      }
-      Serial.println("Storage: migrated version 10 profile masses");
-      save();
-      return true;
-    }
-    }
-
-    {
-    LegacyV11EepromDataEE legacyV11;
-    EEPROM.get(0, legacyV11);
-    uint32_t legacyV11Calc = crc32(
-        (uint8_t*)&legacyV11,
-        sizeof(LegacyV11EepromDataEE) - sizeof(legacyV11.crc));
-
-    if (legacyV11.magic == STORAGE_MAGIC && legacyV11.version == 11 &&
-        legacyV11.crc == legacyV11Calc) {
-      memset(&_data, 0, sizeof(_data));
-      _data.magic = STORAGE_MAGIC;
-      _data.version = STORAGE_VERSION;
-      strncpy(_data.settings.wifiSSID, legacyV11.settings.wifiSSID,
-              STORAGE_SSID_LEN - 1);
-      strncpy(_data.settings.wifiPass, legacyV11.settings.wifiPass,
-              STORAGE_PASS_LEN - 1);
-      // k and C_e cannot be converted meaningfully; start from defaults
-      // until the heater is recalibrated. Rated power carries over.
-      applyHeaterDefaults(_data.settings);
-      _data.settings.heaterPowerW = legacyV11.settings.heaterPowerW;
-      _data.settings.heaterPowerEffW = legacyV11.settings.heaterPowerW * 0.95f;
-      _data.settings.heaterDeadband = legacyV11.settings.heaterDeadband;
-      _data.settings.heaterMinSwitchSec = legacyV11.settings.heaterMinSwitchSec;
-      _data.settings.mixerRestSec = legacyV11.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacyV11.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacyV11.settings.coolDownSec;
-      _data.profileCount = min(legacyV11.profileCount,
-                               (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacyV11.profiles,
-             sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 11 heater model");
-      save();
-      return true;
-    }
-    }
-
-    {
     LegacyV12EepromDataEE legacyV12;
     EEPROM.get(0, legacyV12);
     uint32_t legacyV12Calc = crc32(
         (uint8_t*)&legacyV12,
         sizeof(LegacyV12EepromDataEE) - sizeof(legacyV12.crc));
 
-    if (legacyV12.magic == STORAGE_MAGIC && legacyV12.version == 12 &&
+    if (legacyV12.magic == STORAGE_MAGIC &&
+        legacyV12.version == STORAGE_PREVIOUS_VERSION &&
         legacyV12.crc == legacyV12Calc) {
       memset(&_data, 0, sizeof(_data));
       _data.magic = STORAGE_MAGIC;
@@ -566,6 +161,7 @@ bool Storage::begin() {
       // New fields (target-reached tolerance, sound alerts) get their
       // defaults here; the copies below override everything that existed.
       applyHeaterDefaults(_data.settings);
+      applyMixerDefaults(_data.settings);
       _data.settings.heaterPowerW = legacyV12.settings.heaterPowerW;
       _data.settings.heaterPowerEffW = legacyV12.settings.heaterPowerEffW;
       _data.settings.heaterTauSec = legacyV12.settings.heaterTauSec;
@@ -585,9 +181,8 @@ bool Storage::begin() {
       save();
       return true;
     }
-    }
 
-    Serial.println("Storage: no valid data found (first boot or corrupted) - writing defaults");
+    Serial.println("Storage: no valid data found (first boot, corrupted or too old) - writing defaults");
     loadDefaults();
     save();
     return false;
@@ -606,11 +201,7 @@ void Storage::loadDefaults() {
 
   strncpy(_data.settings.wifiSSID, "MashController", STORAGE_SSID_LEN - 1);
   applyHeaterDefaults(_data.settings);
-  _data.settings.heaterDeadband = 0.1f;
-  _data.settings.heaterMinSwitchSec = 10;
-  _data.settings.mixerRestSec   = 15;
-  _data.settings.mixerOnSec     = 5;
-  _data.settings.coolDownSec    = 180;   // 3 minutes default
+  applyMixerDefaults(_data.settings);
 
   _data.profileCount = 0;
 

@@ -16,6 +16,9 @@
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
 #define STORAGE_VERSION      13            // bump if the struct layout changes
+#define STORAGE_PREVIOUS_VERSION 12        // the ONLY older layout migrated (see Storage.cpp);
+                                           // bumping STORAGE_VERSION without updating this
+                                           // and the Legacy struct breaks the build on purpose
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
