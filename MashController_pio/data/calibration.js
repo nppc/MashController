@@ -144,9 +144,16 @@ function predictedRise(storedJ, capacity, lossW, tau) {
   return { rise: rise * (1 - lossRate / initialRate) - lossRate * tPeak, tPeak };
 }
 
+// heatEndSec is null until the heater switches off. Number(null) is 0, which
+// would look like "switched off at t=0", so map null/missing to NaN.
+function calibrationHeatEnd(status) {
+  const v = status.heatEndSec;
+  return v === null || v === undefined ? NaN : Number(v);
+}
+
 function analyseCalibration(status) {
   const samples = calibrationSamples(status);
-  const off = Number(status.heatEndSec);
+  const off = calibrationHeatEnd(status);
   if (!Number.isFinite(off)) return null;
 
   const capacity = Number(status.waterLiters) * WATER_J_PER_L_C;
@@ -232,7 +239,7 @@ function analyseCalibration(status) {
 function calibrationChartSvg(samples, status, analysis, tMin, tMax, label) {
   const W = 600, H = 220, L = 44, R = 10, T = 10, B = 26;
   const target = Number(status.targetC);
-  const off = Number(status.heatEndSec);
+  const off = calibrationHeatEnd(status);
   const shown = samples.filter(p => p.t >= tMin && p.t <= tMax);
   let yMin = Math.min(...shown.map(p => p.T));
   let yMax = Math.max(...shown.map(p => p.T));
@@ -283,7 +290,7 @@ function renderCalibrationChart(samples, status, analysis) {
   }
   const tEnd = Math.max(samples[samples.length - 1].t, 60);
   let html = calibrationChartSvg(samples, status, analysis, 0, tEnd, 'Whole run');
-  const off = Number(status.heatEndSec);
+  const off = calibrationHeatEnd(status);
   if (Number.isFinite(off) && tEnd - off >= 60) {
     // Zoom on switch-off: the overshoot is too small to see on the full chart.
     html += calibrationChartSvg(samples, status, analysis, Math.max(0, off - 300), tEnd, 'Switch-off and coast');
@@ -292,7 +299,7 @@ function renderCalibrationChart(samples, status, analysis) {
 }
 
 function renderCalibrationTable(samples, status) {
-  const off = Number(status.heatEndSec);
+  const off = calibrationHeatEnd(status);
   document.getElementById('calibrationSampleCount').textContent = samples.length;
   document.getElementById('calibrationSamples').innerHTML = samples.length
     ? samples.map(p => {
@@ -303,7 +310,7 @@ function renderCalibrationTable(samples, status) {
 }
 
 function renderLiveMetrics(status, samples, analysis) {
-  const off = Number(status.heatEndSec);
+  const off = calibrationHeatEnd(status);
   const now = samples.length ? samples[samples.length - 1].t : 0;
   const recent = samples.filter(p => p.t >= now - 300 && (!Number.isFinite(off) || p.t < off));
   const reg = recent.length >= 5 ? linearRegression(recent) : null;
