@@ -115,7 +115,7 @@ The pins are defined in `Config.h`.
 2. Open the project in [PlatformIO](https://platformio.org/).
 3. Build and upload the firmware to your ESP8266 board.
 4. Upload the filesystem image using PlatformIO ("Build Filesystem Image" and "Upload Filesystem Image").
-5. Connect to the device’s AP and configure the wifi password in the settings.
+5. Connect to the device’s AP and open `http://192.168.4.1` in a browser (the default IP address of the Wemos in AP mode). Configure the wifi password in the settings.
 6. Run Autocalibration for your heater setup.
 
 ## License
