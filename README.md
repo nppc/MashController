@@ -4,6 +4,16 @@ MashController is a home brewing automation project built to control the mash pr
 
 This project is designed for a brewer who wants a simple device that can measure temperature, control a heater, run a mixer, and expose a browser-based interface for monitoring and calibration.
 
+## Safety Notice
+
+This project is intended for educational and hobby use.
+
+The software is provided without any warranty. Users are responsible for verifying that the system operates safely in their specific environment.
+
+The author accepts no responsibility for any damage, injury, material loss, or other consequences resulting from the use of this project.
+
+By using this software, you acknowledge that all operation is performed at your own risk.
+
 ## What this project does
 
 During mashing, the temperature must stay within a fairly narrow range to support the desired enzymatic activity and conversion. MashController helps by continuously monitoring the mash temperature and adjusting the heating output to keep it near the target value. It also manages the mixer so the mash stays well mixed and the temperature remains consistent throughout the vessel.
