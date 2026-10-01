@@ -52,9 +52,18 @@ A PID controller works well when the output can be varied smoothly and the proce
 
 ## Screenshots
 
-<!-- Add screenshots of the web interface here -->
-![Main Dashboard](Images/main.png)
-![Heater Calibration](Images/calibration.png)
+<table>
+  <tr>
+    <td valign="top" align="center">
+      <img src="Images/main.png" alt="Main Dashboard" width="300" /><br>
+      <b>Main Dashboard</b>
+    </td>
+    <td valign="top" align="center">
+      <img src="Images/calibration.png" alt="Heater Calibration" width="300" /><br>
+      <b>Heater Calibration</b>
+    </td>
+  </tr>
+</table>
 
 ## Getting Started
 
