@@ -75,6 +75,40 @@ A PID controller works well when the output can be varied smoothly and the proce
   </tr>
 </table>
 
+## Hardware
+
+The wiring diagram below shows how the Wemos D1 mini is connected to the sensor, heater, mixer and cooler.
+
+<p align="center">
+  <img src="Images/schematic.svg" alt="MashController wiring schematic" width="900" />
+</p>
+
+### Parts
+
+- Wemos D1 mini (ESP8266)
+- DS18B20 temperature sensor with a 4.7 kΩ pull-up resistor to 3V3
+- Solid-state relay (SSR), 25 A, for the heater (mains side)
+- Heater element in the mash pot
+- 19 V / 4.2 A AC/DC power adapter (notebook adapter)
+- Buck (DC/DC) converter, 19 V to 5 V, for the Wemos and the fan
+- Mixer driver: small-signal N-MOSFET (Q1) pulling down the gate of an IRFZ30 (Q2), with a 10 kΩ gate pull-up to the 19 V rail
+- 10 kΩ pull-up from D5 to 3V3, so the mixer stays off while the ESP8266 boots
+- DC mixer motor
+- 5 V cooling fan for the SSR, switched by a second N-MOSFET module
+
+### Pin assignment
+
+| Function | Wemos pin | Connected to |
+| --- | --- | --- |
+| `ONE_WIRE_BUS` | D1 | DS18B20 data (DQ) |
+| `HEATER_PIN` | D2 | SSR input (IN+) |
+| `MIXER_PIN` | D5 | Q1 gate (active-low: GPIO LOW = mixer on) |
+| `COOLER_PIN` | D6 | Fan MOSFET module (SIG) |
+
+The pins are defined in `Config.h`.
+
+> **Warning:** the SSR switches mains voltage. Mount it on a heatsink, use a properly rated and enclosed installation, and never work on the mains wiring while it is connected to power. A flyback diode across the motor and the fan is recommended; it is not drawn in the schematic.
+
 ## Getting Started
 
 1. Clone the repository.
