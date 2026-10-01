@@ -94,7 +94,7 @@ The wiring diagram below shows how the Wemos D1 mini is connected to the sensor,
 - Mixer driver: small-signal N-MOSFET (Q1) pulling down the gate of an IRFZ30 (Q2), with a 10 kΩ gate pull-up to the 19 V rail
 - 10 kΩ pull-up from D5 to 3V3, so the mixer stays off while the ESP8266 boots
 - DC mixer motor
-- 5 V cooling fan for the SSR, switched by a second N-MOSFET module
+- 5 V cooling fan for the SSR, switched by a second N-MOSFET module (optional, see below)
 
 ### Pin assignment
 
@@ -106,6 +106,8 @@ The wiring diagram below shows how the Wemos D1 mini is connected to the sensor,
 | `COOLER_PIN` | D6 | Fan MOSFET module (SIG) |
 
 The pins are defined in `Config.h`.
+
+**Fan control is optional.** The fan MOSFET module and `COOLER_PIN` (D6) can be omitted. In that case, connect the fan directly to the 5 V rail (fan + to 5 V, fan − to GND), and it will run continuously.
 
 > **Warning:** the SSR switches mains voltage. Mount it on a heatsink, use a properly rated and enclosed installation, and never work on the mains wiring while it is connected to power. A flyback diode across the motor and the fan is recommended; it is not drawn in the schematic.
 
