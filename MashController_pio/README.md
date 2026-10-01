@@ -53,8 +53,8 @@ A PID controller works well when the output can be varied smoothly and the proce
 ## Screenshots
 
 <!-- Add screenshots of the web interface here -->
-![Main Dashboard](path/to/dashboard_screenshot.png)
-![Heater Calibration](path/to/calibration_screenshot.png)
+![Main Dashboard](Images/main.png)
+![Heater Calibration](Images/calibration.png)
 
 ## Getting Started
 
