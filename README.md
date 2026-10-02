@@ -85,8 +85,8 @@ The wiring diagram below shows how the Wemos D1 mini is connected to the sensor,
 - Heater element under the mash pot
 - 19 V / 4.2 A AC/DC power adapter (notebook adapter)
 - Buck (DC/DC) converter, 19 V to 5 V, for the Wemos and the fan
-- Mixer driver: small-signal N-MOSFET (Q1) pulling down the gate of an IRFZ30 (Q2), with a 10 kΩ gate pull-up to the 19 V rail
-- 10 kΩ pull-up from D5 to 3V3, so the mixer stays off while the ESP8266 boots
+- Mixer driver (default, inverted): small-signal N-MOSFET (Q1) pulling down the gate of an IRFZ30 (Q2), with a 10 kΩ gate pull-up to the 19 V rail. A single logic-level N-MOSFET driven directly by the GPIO also works, see [Mixer drive polarity](#mixer-drive-polarity)
+- Inverted drive only: 10 kΩ pull-up from D5 to 3V3, so the mixer stays off while the ESP8266 boots
 - 24VDC mixer motor
 - 5 V cooling fan for the SSR, switched by a second N-MOSFET module (optional, see below)
 
@@ -96,10 +96,21 @@ The wiring diagram below shows how the Wemos D1 mini is connected to the sensor,
 | --- | --- | --- |
 | `ONE_WIRE_BUS` | D1 | DS18B20 data (DQ) |
 | `HEATER_PIN` | D2 | SSR input (IN+) |
-| `MIXER_PIN` | D5 | Q1 gate (active-low: GPIO LOW = mixer on) |
+| `MIXER_PIN` | D5 | Inverted drive (default): Q1 gate, active-low, GPIO LOW = mixer on. Non-inverted drive: MOSFET gate, active-high, GPIO HIGH = mixer on |
 | `COOLER_PIN` | D6 | Fan MOSFET module (SIG) |
 
 The pins are defined in `Config.h`.
+
+### Mixer drive polarity
+
+The mixer polarity is set by `MIXER_OUTPUT_INVERTED` in `Config.h`:
+
+| `MIXER_OUTPUT_INVERTED` | Mixer driver | GPIO level for mixer on |
+| --- | --- | --- |
+| `1` (default) | Q1 pulling down the gate of Q2 (as in the schematic) | LOW |
+| `0` | One logic-level N-MOSFET driven directly by the GPIO | HIGH |
+
+Q1 inverts the signal, which is why the default drive is active-low. With a single N-MOSFET no inversion is needed, so set the define to `0`. Keep the mixer off while the ESP8266 boots: the 10 kΩ pull-up to 3V3 does this for the inverted drive, while a non-inverted drive needs a pull-down instead (for example 10 kΩ from the gate to GND).
 
 **Fan control is optional.** The fan MOSFET module and `COOLER_PIN` (D6) can be omitted. In that case, connect the fan directly to the 5 V rail (fan + to 5 V, fan − to GND), and it will run continuously.
 

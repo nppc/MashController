@@ -21,6 +21,9 @@
 // Add an external pull-up (GPIO to 3.3V) on this pin so the motor
 // defaults OFF during the boot window before setup() runs.
 #define MIXER_PIN D5
+// Set to 1 to keep the current active-low mixer drive behavior (GPIO HIGH = off).
+// Set to 0 for a non-inverted drive (GPIO HIGH = on).
+#define MIXER_OUTPUT_INVERTED 1
 
 #define COOLER_PIN D6
 

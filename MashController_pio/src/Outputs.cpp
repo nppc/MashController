@@ -16,12 +16,20 @@ bool coolerOn = LOW;
 namespace {
 constexpr uint32_t MIXER_PWM_FREQUENCY_HZ = 500;
 constexpr uint32_t MIXER_PWM_RANGE = 1023;
-// How long the mixer takes to ramp from its starting duty down to 0 (full
-// speed) after being switched on, to avoid slamming it to full speed instantly.
+// How long the mixer takes to ramp from its starting duty up to full speed after
+// being switched on, to avoid slamming it to full speed instantly.
 constexpr uint32_t MIXER_RAMP_TIME_MS = 500;
-// Duty cycle the mixer ramp starts from. analogWrite is inverted here (higher
-// duty = slower), so this is a low starting speed rather than a high one.
-constexpr uint32_t MIXER_START_DUTY = (1023 - 256); //(MIXER_PWM_RANGE + 1) / 2;
+// Start the mixer at a low duty cycle, then increase toward full speed. The
+// final GPIO duty is inverted when the hardware expects an active-low drive.
+constexpr uint32_t MIXER_START_DUTY = 256;
+
+inline uint32_t applyMixerOutputInvert(uint32_t duty) {
+#if MIXER_OUTPUT_INVERTED
+  return MIXER_PWM_RANGE - duty;
+#else
+  return duty;
+#endif
+}
 
 // How long the cooler is kept on after the heater last switches off.
 constexpr uint32_t COOLER_OFF_DELAY_MS = 60000;
@@ -43,7 +51,7 @@ void outputsInit() {
   digitalWrite(HEATER_PIN, LOW);
 
   pinMode(MIXER_PIN, OUTPUT);
-  analogWrite(MIXER_PIN, MIXER_PWM_RANGE);
+  analogWrite(MIXER_PIN, applyMixerOutputInvert(0));
 
   pinMode(COOLER_PIN, OUTPUT);
   digitalWrite(COOLER_PIN, coolerOn);
@@ -88,11 +96,11 @@ void applyOutputs() {
   }
   digitalWrite(COOLER_PIN, coolerOn);
 
-  // --- Mixer: soft-start ramp. When mixerOn goes true, duty starts at
-  // MIXER_START_DUTY (slow) and linearly falls to 0 (full speed) over
-  // MIXER_RAMP_TIME_MS, instead of snapping straight to full speed. ---
+  // --- Mixer: soft-start ramp. When mixerOn goes true, the PWM duty ramps up
+  // from a low starting value to full speed over MIXER_RAMP_TIME_MS. The final
+  // GPIO duty is optionally inverted to support active-low mixer drivers. ---
   if (!mixerOn) {
-    analogWrite(MIXER_PIN, MIXER_PWM_RANGE); // fully off
+    analogWrite(MIXER_PIN, applyMixerOutputInvert(0)); // fully off
     mixerWasOn = false;
   } else {
     if (!mixerWasOn) {
@@ -102,14 +110,13 @@ void applyOutputs() {
     }
 
     const uint32_t elapsed = millis() - mixerStartTime;
-    uint32_t duty = 0; // ramp finished: full speed
+    uint32_t duty = MIXER_PWM_RANGE; // ramp finished: full speed
     if (elapsed < MIXER_RAMP_TIME_MS) {
-      // Quadratic ease-in on speed (duty is inverted):
-      // duty = START - START * elapsed^2 / T^2
-      duty = MIXER_START_DUTY -
-             (MIXER_START_DUTY * elapsed * elapsed) /
+      // Quadratic ease-in on speed: start at a low duty and ramp up to full.
+      duty = MIXER_START_DUTY +
+             ((MIXER_PWM_RANGE - MIXER_START_DUTY) * elapsed * elapsed) /
                  (MIXER_RAMP_TIME_MS * MIXER_RAMP_TIME_MS);
     }
-    analogWrite(MIXER_PIN, duty);
+    analogWrite(MIXER_PIN, applyMixerOutputInvert(duty));
   }
 }
