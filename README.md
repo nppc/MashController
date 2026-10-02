@@ -7,11 +7,8 @@ This project is designed for a brewer who wants a simple device that can measure
 ## Safety Notice
 
 This project is intended for educational and hobby use.
-
 The software is provided without any warranty. Users are responsible for verifying that the system operates safely in their specific environment.
-
 The author accepts no responsibility for any damage, injury, material loss, or other consequences resulting from the use of this project.
-
 By using this software, you acknowledge that all operation is performed at your own risk.
 
 ## What this project does
@@ -23,6 +20,8 @@ During mashing, the temperature must stay within a fairly narrow range to suppor
 The heater control is model-based and predictive, not simple threshold switching. The controller keeps a calibrated thermal model of the heating element's stored heat, and on every cycle predicts the peak temperature the mash will coast to if the heater switched off right now — accounting for residual stored heat and loss to ambient.
 It switches on when that predicted peak drops below target minus a deadband, and switches off once the predicted peak reaches target — turning off before the sensor shows target, anticipating the heat still flowing in. A minimum switch-lock interval prevents rapid cycling. The result: stable, repeatable mash temperature with minimal overshoot, since the controller reacts to where temperature is heading, not just where it is now.
 
+> **Why not PID?** A PID controller suits outputs that can be varied smoothly and processes that respond quickly. Here the heater is only fully on or off, and the response is slow and delayed by stored heat, sensor lag and the mixer cycle. Even with autotuning, PID only works acceptably within a narrow setup window, and a different volume or mash needs retuning.
+
 ## Mixer logic
 
 The mixer logic is intended to keep the mash moving while the heater is active. A mash can develop temperature gradients, especially in a vessel with a heating element near the bottom, where the liquid close to the heater becomes warmer than the rest. The mixer helps prevent that by circulating the mash and blending warmer and cooler zones together.
@@ -33,17 +32,13 @@ This improves consistency, reduces hot spots, and helps the system hold a more u
 
 A profile is a complete mash schedule: a list of temperature steps (up to 6), each with a target temperature and a duration. Up to 15 profiles can be stored on the device. They are edited on the Profiles screen and started from the Home screen, where the active step and remaining time are shown.
 
-A step with its time set to 0 is a manual step: the controller heats to the target temperature and then waits until you press RESUME, for example to add grain. While a profile runs it can be paused, resumed, skipped to the next step or stopped. After the last step the mixer keeps running for a configurable cool-down time. Profiles cannot be edited while a process is running.
+A step with its time set to 0 is a manual step: the controller heats to the target temperature and then waits until you press RESUME, for example to add grain. While a profile runs it can be paused, resumed, skipped to the next step or stopped. After the last step the mixer keeps running for a configurable cool-down time if needed.
 
 When a manual step reaches its target temperature, the browser plays a soft chime, repeats it every 20 seconds until you press RESUME or STOP, and flashes the tab title. Browsers block sound until the page has been tapped once (for example after a refresh), so a yellow bar appears while a process is running to let you enable it. The alert can be switched off in Settings (**Sound Alerts**), and **Target Reached Tolerance** sets how many degrees below the target still counts as reached.
 
 ## Heater calibration
 
 The DS18B20 sensor is factory-calibrated, so the sensor itself is not calibrated. What is calibrated is the **heater**. The element and pot base store heat, which keeps flowing into the water after switch-off, so the temperature overshoots. An automatic test on plain water (see the calibration page) measures the time constant (τ), effective power, store gain and heat loss of your setup, and the controller uses them to switch off early by the right amount.
-
-### Why not PID?
-
-A PID controller works well when the output can be varied smoothly and the process responds quickly. Here the heater is switched fully on or off, and the response is slow and delayed: stored heat in the element and pot base, the sensor lag and the mixer cycle all postpone the effect of any change. With that much lag the integral term winds up and the loop overshoots or oscillates remarcably. A model of the stored heat, fitted from a real calibration run, predicts the overshoot directly and gives a more repeatable result.
 
 > **Safety:** never leave the heater running unattended during calibration, and do not add grain.
 
@@ -87,12 +82,12 @@ The wiring diagram below shows how the Wemos D1 mini is connected to the sensor,
 - Wemos D1 mini (ESP8266)
 - DS18B20 temperature sensor with a 4.7 kΩ pull-up resistor to 3V3
 - Solid-state relay (SSR), 25 A, for the heater (mains side)
-- Heater element in the mash pot
+- Heater element under the mash pot
 - 19 V / 4.2 A AC/DC power adapter (notebook adapter)
 - Buck (DC/DC) converter, 19 V to 5 V, for the Wemos and the fan
 - Mixer driver: small-signal N-MOSFET (Q1) pulling down the gate of an IRFZ30 (Q2), with a 10 kΩ gate pull-up to the 19 V rail
 - 10 kΩ pull-up from D5 to 3V3, so the mixer stays off while the ESP8266 boots
-- DC mixer motor
+- 24VDC mixer motor
 - 5 V cooling fan for the SSR, switched by a second N-MOSFET module (optional, see below)
 
 ### Pin assignment
