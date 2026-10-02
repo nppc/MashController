@@ -20,9 +20,8 @@ During mashing, the temperature must stay within a fairly narrow range to suppor
 
 ## Heater temperature control logic
 
-The heater control is based on temperature feedback. The controller reads the current temperature from the sensor, compares it to the configured target temperature, and then switches the heater on or off depending on whether the mash is below or above the desired range.
-
-The logic is designed to reduce overshoot and avoid excessive switching by using a small control band and tuned thresholds. In practice, this means the heater will turn on when the mash drops below the target range and turn off once the temperature is back within the desired operating window. This keeps the mash temperature stable enough for a predictable and repeatable mash. The heater also keeps releasing stored heat after it is switched off, so the controller uses the values from the [heater calibration](#heater-calibration) to switch off slightly early.
+The heater control is model-based and predictive, not simple threshold switching. The controller keeps a calibrated thermal model of the heating element's stored heat, and on every cycle predicts the peak temperature the mash will coast to if the heater switched off right now — accounting for residual stored heat and loss to ambient.
+It switches on when that predicted peak drops below target minus a deadband, and switches off once the predicted peak reaches target — turning off before the sensor shows target, anticipating the heat still flowing in. A minimum switch-lock interval prevents rapid cycling. The result: stable, repeatable mash temperature with minimal overshoot, since the controller reacts to where temperature is heading, not just where it is now.
 
 ## Mixer logic
 
