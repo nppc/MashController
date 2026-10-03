@@ -1,6 +1,7 @@
 #include "Sensor.h"
 #include "Heater.h"    // updateHeater() runs on every new reading
 #include "Outputs.h"   // fakeReadTemperature() follows the real heater output
+#include "Calibration.h"
 #include "Storage.h"   // fakeReadTemperature() reads heaterAmbientC from settings
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -192,7 +193,12 @@ void sensorUpdate() {
   addTemp(t);
   updateHeater();
 #else
-  if (!sensorFound) return;
+  if (!sensorFound) {
+    sensorOk = false;
+    heaterOn = false;
+    calibrationStop();
+    return;
+  }
 
   unsigned long now = millis();
 
@@ -210,6 +216,8 @@ void sensorUpdate() {
 
     if (t == DEVICE_DISCONNECTED_C) {
       sensorOk = false;
+      heaterOn = false;
+      calibrationStop();
       Serial.println("DS18B20 read error");
       // keep lastGoodTemp as-is; don't feed a garbage value to updateHeater()
     } else {

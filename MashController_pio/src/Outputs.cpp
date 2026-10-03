@@ -14,7 +14,7 @@
 bool coolerOn = LOW;
 
 namespace {
-constexpr uint32_t MIXER_PWM_FREQUENCY_HZ = 500;
+constexpr uint32_t MIXER_PWM_FREQUENCY_HZ = 1000;
 constexpr uint32_t MIXER_PWM_RANGE = 1023;
 // How long the mixer takes to ramp from its starting duty up to full speed after
 // being switched on, to avoid slamming it to full speed instantly.
@@ -31,19 +31,27 @@ inline uint32_t applyMixerOutputInvert(uint32_t duty) {
 #endif
 }
 
-// How long the cooler is kept on after the heater last switches off.
-constexpr uint32_t COOLER_OFF_DELAY_MS = 60000;
+// Cooler post-run follows the heater's last on-time, within these bounds.
+constexpr uint32_t COOLER_MIN_RUN_MS = 30UL * 1000UL;
+constexpr uint32_t COOLER_MAX_RUN_MS = 5UL * 60UL * 1000UL;
 
 // Mixer ramp bookkeeping.
 uint32_t mixerStartTime = 0; // millis() timestamp when the current ramp began
 bool mixerWasOn = false;     // tracks mixerOn's previous state to detect the on-edge
 
-// Cooler off-delay bookkeeping.
-uint32_t heaterOffTime = 0; // millis() timestamp of the heater's last on->off transition
-bool heaterWasOn = false;   // tracks heaterActive's previous state to detect the off-edge
+// Heater interval and cooler post-run bookkeeping.
+uint32_t heaterOnStartTime = 0;
+uint32_t heaterOffTime = 0;
+uint32_t coolerRunDurationMs = 0;
+bool heaterWasOn = false;
 }
 
 void outputsInit() {
+
+  heaterOffTime = millis();
+  coolerRunDurationMs = 0;
+  heaterWasOn = false;
+  coolerOn = false;
 
   analogWriteFreq(MIXER_PWM_FREQUENCY_HZ);
   analogWriteRange(MIXER_PWM_RANGE);
@@ -71,28 +79,31 @@ bool heaterOutputActive() {
 // iteration rather than at every place that sets those booleans, so the
 // hardware can never drift out of sync with the state variables.
 void applyOutputs() {
+  const uint32_t now = millis();
   const bool heaterActive = heaterOutputActive();
   digitalWrite(HEATER_PIN, heaterActive ? HIGH : LOW);
 
-  // --- Cooler: on whenever the heater is, and for COOLER_OFF_DELAY_MS
-  // after the heater last turned off, so brief heater cycling never
-  // toggles the cooler off and on in between. ---
+  // --- Cooler: on with the heater, then for a bounded period matching its
+  // last on-time. ---
   if (heaterActive) {
-    // Heater is on (or back on within the delay window): cooler stays on,
-    // and the off-timer is reset for whenever the heater next stops.
+    if (!heaterWasOn) {
+      heaterOnStartTime = now;
+      heaterWasOn = true;
+    }
     coolerOn = true;
-    heaterWasOn = true;
   } else {
     if (heaterWasOn) {
-      // Heater just turned off: start the 1-minute cooldown window.
-      heaterOffTime = millis();
+      heaterOffTime = now;
+      coolerRunDurationMs = now - heaterOnStartTime;
+      if (coolerRunDurationMs < COOLER_MIN_RUN_MS) {
+        coolerRunDurationMs = COOLER_MIN_RUN_MS;
+      } else if (coolerRunDurationMs > COOLER_MAX_RUN_MS) {
+        coolerRunDurationMs = COOLER_MAX_RUN_MS;
+      }
       heaterWasOn = false;
     }
-    // Stays on until COOLER_OFF_DELAY_MS has elapsed since the heater
-    // last switched off. If the heater cycles back on before then,
-    // the branch above keeps coolerOn true the whole time, so short
-    // heater cycling never toggles the cooler off in between.
-    coolerOn = (millis() - heaterOffTime) < COOLER_OFF_DELAY_MS;
+    coolerOn = coolerRunDurationMs > 0 &&
+               (now - heaterOffTime) < coolerRunDurationMs;
   }
   digitalWrite(COOLER_PIN, coolerOn);
 

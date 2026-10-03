@@ -1525,3 +1525,22 @@ button:disabled {
   outline: 2px solid var(--accent2);
   outline-offset: 2px;
 }
+
+.fan-icon {
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.2s, opacity 0.2s;
+}
+.fan-icon.off { color: #7a7f87; opacity: 0.6; }
+.fan-icon.on  { color: #4fc3f7; }
+
+.fan-spin {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: fanSpin 0.8s linear infinite;
+}
+@keyframes fanSpin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fan-spin { animation: none; }
+}

@@ -238,11 +238,18 @@ let controllerStatus = {
   currentTemp: 0,
   remaining: 0
 };
+let sensorMissingToastShown = false;
 
 async function updateStatus() {
   try {
     const res = await fetch('status');
     const st = await res.json();
+
+    const sensorMissing = st.currentTemp === -127;
+    if (sensorMissing && !sensorMissingToastShown) {
+      showToast('Temperature sensor not found', 'error');
+    }
+    sensorMissingToastShown = sensorMissing;
 
     controllerStatus = st;
 
@@ -251,7 +258,7 @@ async function updateStatus() {
     updateProcessUI(st);
 
     document.getElementById('curTemp').textContent =
-      Number(st.currentTemp).toFixed(1);
+      st.currentTemp === -127 ? '--.-' : Number(st.currentTemp).toFixed(1);
 
     // The Settings screen's "Last Reading" reuses this same status poll
     // (already running every second on every screen) instead of a poll of
@@ -404,6 +411,13 @@ function updateProcessUI(st) {
 		heater.classList.toggle('on', st.heaterOn);
 		heater.classList.toggle('off', !st.heaterOn);
 	}
+
+  const fan = document.getElementById('fanIcon');
+  if (fan) {
+    fan.innerHTML = st.coolerOn ? Icons.fanOn : Icons.fanOff;
+    fan.classList.toggle('on', !!st.coolerOn);
+    fan.classList.toggle('off', !st.coolerOn);
+  }
 
 	renderMixerStatus(st);
 }

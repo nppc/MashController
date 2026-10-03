@@ -591,8 +591,9 @@ static void handleStatus() {
   doc["grainMassKg"] = activeProfile.grainMassKg;
   doc["step"] = currentStep;
   doc["stepTemp"] = round1(targetTemperature);
-  doc["currentTemp"] = round1(readTemperature());
+  doc["currentTemp"] = sensorFound && sensorOk ? round1(readTemperature()) : -127;
   doc["heaterOn"] = heaterOutputActive();
+  doc["coolerOn"] = coolerOn;
   const float predictedPeak = heaterPredictedPeak();
   if (isfinite(predictedPeak)) doc["predictedPeak"] = predictedPeak;
 
