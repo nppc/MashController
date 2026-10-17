@@ -428,18 +428,26 @@
 	  </div>
 
 	  <div class="stat-card">
-		<div class="label">Network</div>
+		<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+		  <div class="label" style="margin:0;">Network</div>
+		  <div class="mode-toggle" id="wifiModeToggle" onclick="toggleWifiMode()">
+			<span class="mode-toggle-option active" id="wifiModeApOption">Local AP</span>
+			<span class="mode-toggle-option" id="wifiModeStaOption">External Wi-Fi</span>
+		  </div>
+		</div>
 
 		<div class="settings-group">
-
-		  <div class="label-small">WiFi SSID</div>
+		  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+			<div class="label-small" id="wifiSsidLabel">AP Name (SSID)</div>
+			<span class="heater-badge off" id="wifiStatusBadge" style="font-size:10px; padding:2px 8px;">AP</span>
+		  </div>
 		  <input
 			id="setWifiSsid"
 			class="input-dark"
 			type="text">
 
-		  <div class="label-small" style="margin-top:12px;">
-			WiFi Password
+		  <div class="label-small" style="margin-top:12px;" id="wifiPassLabel">
+			AP Password
 		  </div>
 
 		  <input
@@ -447,6 +455,10 @@
 			class="input-dark"
 			type="password"
 			placeholder="Leave empty to keep unchanged">
+
+		  <div class="label-small" id="wifiModeNotice" style="margin-top:10px; font-weight:normal; font-size:11px; color:var(--text-dim); line-height:1.4;">
+			Controller creates its own Wi-Fi network at 192.168.4.1 (or http://mash.local). Password is optional (min 8 characters).
+		  </div>
 		</div>
 	  </div>
 

@@ -73,10 +73,13 @@ Storage storage;
 namespace {
 
 // ---- Previous layout (version STORAGE_PREVIOUS_VERSION) -------------------
-// Layout of version 12 (before targetReachedHystC / alertSoundEnabled were added).
-struct LegacyV12SettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
+// Layout of version 13 (before dual wifi AP/STA modes were added).
+constexpr size_t LEGACY_V13_SSID_LEN = 24;
+constexpr size_t LEGACY_V13_PASS_LEN = 24;
+
+struct LegacyV13SettingsEE {
+  char     wifiSSID[LEGACY_V13_SSID_LEN];
+  char     wifiPass[LEGACY_V13_PASS_LEN];
   float    heaterPowerW;
   float    heaterPowerEffW;
   float    heaterTauSec;
@@ -88,12 +91,14 @@ struct LegacyV12SettingsEE {
   uint8_t  mixerRestSec;
   uint8_t  mixerOnSec;
   uint16_t coolDownSec;
+  float    targetReachedHystC;
+  bool     alertSoundEnabled;
 };
 
-struct LegacyV12EepromDataEE {
+struct LegacyV13EepromDataEE {
   uint32_t             magic;
   uint16_t             version;
-  LegacyV12SettingsEE  settings;
+  LegacyV13SettingsEE  settings;
   uint8_t              profileCount;
   ProfileEE            profiles[STORAGE_MAX_PROFILES];
   uint32_t             crc;
@@ -105,8 +110,8 @@ static_assert(STORAGE_VERSION == STORAGE_PREVIOUS_VERSION + 1,
               "STORAGE_VERSION was bumped: snapshot the old SettingsEE as "
               "LegacyV<old>SettingsEE, update STORAGE_PREVIOUS_VERSION, "
               "migrate it in begin(), and delete the older Legacy struct.");
-static_assert(STORAGE_PREVIOUS_VERSION == 12,
-              "STORAGE_PREVIOUS_VERSION no longer matches LegacyV12* - "
+static_assert(STORAGE_PREVIOUS_VERSION == 13,
+              "STORAGE_PREVIOUS_VERSION no longer matches LegacyV13* - "
               "rename/replace the Legacy struct and migration block.");
 
 // Uncalibrated starting point for a 2 kW under-base element; run the
@@ -142,42 +147,50 @@ bool Storage::begin() {
   uint32_t calc = crc32((uint8_t*)&_data, sizeof(EepromDataEE) - sizeof(_data.crc));
 
   if (_data.magic != STORAGE_MAGIC || _data.version != STORAGE_VERSION || storedCrc != calc) {
-    LegacyV12EepromDataEE legacyV12;
-    EEPROM.get(0, legacyV12);
-    uint32_t legacyV12Calc = crc32(
-        (uint8_t*)&legacyV12,
-        sizeof(LegacyV12EepromDataEE) - sizeof(legacyV12.crc));
+    LegacyV13EepromDataEE legacyV13;
+    EEPROM.get(0, legacyV13);
+    uint32_t legacyV13Calc = crc32(
+        (uint8_t*)&legacyV13,
+        sizeof(LegacyV13EepromDataEE) - sizeof(legacyV13.crc));
 
-    if (legacyV12.magic == STORAGE_MAGIC &&
-        legacyV12.version == STORAGE_PREVIOUS_VERSION &&
-        legacyV12.crc == legacyV12Calc) {
+    if (legacyV13.magic == STORAGE_MAGIC &&
+        legacyV13.version == STORAGE_PREVIOUS_VERSION &&
+        legacyV13.crc == legacyV13Calc) {
       memset(&_data, 0, sizeof(_data));
       _data.magic = STORAGE_MAGIC;
       _data.version = STORAGE_VERSION;
-      strncpy(_data.settings.wifiSSID, legacyV12.settings.wifiSSID,
+
+      _data.settings.wifiMode = WIFI_MODE_AP;
+      strncpy(_data.settings.wifiApSSID, legacyV13.settings.wifiSSID,
               STORAGE_SSID_LEN - 1);
-      strncpy(_data.settings.wifiPass, legacyV12.settings.wifiPass,
+      _data.settings.wifiApSSID[STORAGE_SSID_LEN - 1] = '\0';
+      strncpy(_data.settings.wifiApPass, legacyV13.settings.wifiPass,
               STORAGE_PASS_LEN - 1);
-      // New fields (target-reached tolerance, sound alerts) get their
-      // defaults here; the copies below override everything that existed.
+      _data.settings.wifiApPass[STORAGE_PASS_LEN - 1] = '\0';
+      _data.settings.wifiStaSSID[0] = '\0';
+      _data.settings.wifiStaPass[0] = '\0';
+
       applyHeaterDefaults(_data.settings);
       applyMixerDefaults(_data.settings);
-      _data.settings.heaterPowerW = legacyV12.settings.heaterPowerW;
-      _data.settings.heaterPowerEffW = legacyV12.settings.heaterPowerEffW;
-      _data.settings.heaterTauSec = legacyV12.settings.heaterTauSec;
-      _data.settings.heaterStoreGain = legacyV12.settings.heaterStoreGain;
-      _data.settings.heaterLossWPerC = legacyV12.settings.heaterLossWPerC;
-      _data.settings.heaterAmbientC = legacyV12.settings.heaterAmbientC;
-      _data.settings.heaterDeadband = legacyV12.settings.heaterDeadband;
-      _data.settings.heaterMinSwitchSec = legacyV12.settings.heaterMinSwitchSec;
-      _data.settings.mixerRestSec = legacyV12.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacyV12.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacyV12.settings.coolDownSec;
-      _data.profileCount = min(legacyV12.profileCount,
+      _data.settings.heaterPowerW = legacyV13.settings.heaterPowerW;
+      _data.settings.heaterPowerEffW = legacyV13.settings.heaterPowerEffW;
+      _data.settings.heaterTauSec = legacyV13.settings.heaterTauSec;
+      _data.settings.heaterStoreGain = legacyV13.settings.heaterStoreGain;
+      _data.settings.heaterLossWPerC = legacyV13.settings.heaterLossWPerC;
+      _data.settings.heaterAmbientC = legacyV13.settings.heaterAmbientC;
+      _data.settings.heaterDeadband = legacyV13.settings.heaterDeadband;
+      _data.settings.heaterMinSwitchSec = legacyV13.settings.heaterMinSwitchSec;
+      _data.settings.mixerRestSec = legacyV13.settings.mixerRestSec;
+      _data.settings.mixerOnSec = legacyV13.settings.mixerOnSec;
+      _data.settings.coolDownSec = legacyV13.settings.coolDownSec;
+      _data.settings.targetReachedHystC = legacyV13.settings.targetReachedHystC;
+      _data.settings.alertSoundEnabled = legacyV13.settings.alertSoundEnabled;
+
+      _data.profileCount = min(legacyV13.profileCount,
                                (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacyV12.profiles,
+      memcpy(_data.profiles, legacyV13.profiles,
              sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 12 settings");
+      Serial.println("Storage: migrated version 13 settings");
       save();
       return true;
     }
@@ -199,7 +212,13 @@ void Storage::loadDefaults() {
   _data.magic   = STORAGE_MAGIC;
   _data.version = STORAGE_VERSION;
 
-  strncpy(_data.settings.wifiSSID, "MashController", STORAGE_SSID_LEN - 1);
+  _data.settings.wifiMode = WIFI_MODE_AP;
+  strncpy(_data.settings.wifiApSSID, "MashController", STORAGE_SSID_LEN - 1);
+  _data.settings.wifiApSSID[STORAGE_SSID_LEN - 1] = '\0';
+  _data.settings.wifiApPass[0] = '\0';
+  _data.settings.wifiStaSSID[0] = '\0';
+  _data.settings.wifiStaPass[0] = '\0';
+
   applyHeaterDefaults(_data.settings);
   applyMixerDefaults(_data.settings);
 

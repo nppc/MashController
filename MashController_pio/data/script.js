@@ -1069,6 +1069,80 @@ document.addEventListener('click', (e) => {
 });
 
 
+let currentWifiMode = 0; // 0 = AP, 1 = STA
+let wifiSettings = {
+    ap: { ssid: 'MashController', pass: '', passSet: false },
+    sta: { ssid: '', pass: '', passSet: false }
+};
+
+function toggleWifiMode() {
+    setWifiMode(currentWifiMode === 0 ? 1 : 0);
+}
+
+function setWifiMode(mode) {
+    if (currentWifiMode === mode) return;
+
+    // Cache current inputs into active mode
+    const ssidInput = document.getElementById('setWifiSsid');
+    const passInput = document.getElementById('setWifiPass');
+    if (ssidInput && passInput) {
+        if (currentWifiMode === 0) {
+            wifiSettings.ap.ssid = ssidInput.value;
+            wifiSettings.ap.pass = passInput.value;
+        } else {
+            wifiSettings.sta.ssid = ssidInput.value;
+            wifiSettings.sta.pass = passInput.value;
+        }
+    }
+
+    currentWifiMode = mode;
+    renderWifiUI();
+}
+
+function renderWifiUI() {
+    const isAp = (currentWifiMode === 0);
+    const apOpt = document.getElementById('wifiModeApOption');
+    const staOpt = document.getElementById('wifiModeStaOption');
+    if (apOpt && staOpt) {
+        apOpt.classList.toggle('active', isAp);
+        staOpt.classList.toggle('active', !isAp);
+    }
+
+    const ssidLabel = document.getElementById('wifiSsidLabel');
+    const passLabel = document.getElementById('wifiPassLabel');
+    const notice = document.getElementById('wifiModeNotice');
+    const ssidInput = document.getElementById('setWifiSsid');
+    const passInput = document.getElementById('setWifiPass');
+
+    if (isAp) {
+        if (ssidLabel) ssidLabel.textContent = 'AP Name (SSID)';
+        if (passLabel) passLabel.textContent = 'AP Password';
+        if (ssidInput) ssidInput.value = wifiSettings.ap.ssid;
+        if (passInput) {
+            passInput.value = wifiSettings.ap.pass;
+            passInput.placeholder = wifiSettings.ap.passSet
+                ? 'Leave empty to keep unchanged'
+                : 'Leave empty for open AP (or min 8 chars)';
+        }
+        if (notice) {
+            notice.textContent = 'Controller creates its own Wi-Fi network at 192.168.4.1 (or http://mash.local). Password is optional (min 8 chars) or leave empty for open network.';
+        }
+    } else {
+        if (ssidLabel) ssidLabel.textContent = 'Network Name (SSID)';
+        if (passLabel) passLabel.textContent = 'Network Password';
+        if (ssidInput) ssidInput.value = wifiSettings.sta.ssid;
+        if (passInput) {
+            passInput.value = wifiSettings.sta.pass;
+            passInput.placeholder = wifiSettings.sta.passSet
+                ? 'Leave empty to keep unchanged'
+                : 'Network password';
+        }
+        if (notice) {
+            notice.textContent = 'Controller connects to your home Wi-Fi network and is accessible at http://mash.local. If connection fails within 15s, it will automatically fall back to Local AP.';
+        }
+    }
+}
+
 let settings = {};
 
 async function loadSettings() {
@@ -1106,9 +1180,6 @@ async function loadSettings() {
         document.getElementById('setMixerRestSec').value =
             settings.mixerRestSec ?? 15;
 
-        document.getElementById('setWifiSsid').value =
-            settings.wifiSSID ?? '';
-
 		document.getElementById('setCoolDownSec').value =
 			settings.coolDownSec ?? 180;
 
@@ -1118,6 +1189,25 @@ async function loadSettings() {
 		document.getElementById('setAlertSound').checked =
 			settings.alertSoundEnabled ?? true;
 
+        currentWifiMode = settings.wifiMode ?? 0;
+        wifiSettings.ap.ssid = settings.wifiApSSID ?? 'MashController';
+        wifiSettings.ap.pass = '';
+        wifiSettings.ap.passSet = !!settings.wifiApPassSet;
+
+        wifiSettings.sta.ssid = settings.wifiStaSSID ?? '';
+        wifiSettings.sta.pass = '';
+        wifiSettings.sta.passSet = !!settings.wifiStaPassSet;
+
+        const statusBadge = document.getElementById('wifiStatusBadge');
+        if (statusBadge) {
+            const activeMode = settings.wifiActiveMode ?? 'AP';
+            const ip = settings.wifiIP ?? '';
+            statusBadge.textContent = `${activeMode}: ${ip}`;
+            statusBadge.classList.toggle('status-ok', activeMode === 'STA');
+            statusBadge.classList.toggle('off', activeMode !== 'STA');
+        }
+
+        renderWifiUI();
 		renderSensorInfo(settings);
 
     } catch (e) {
@@ -1192,6 +1282,17 @@ async function rediscoverSensor() {
 
 async function saveSettings() {
     try {
+        const ssidInput = document.getElementById('setWifiSsid');
+        const passInput = document.getElementById('setWifiPass');
+        if (ssidInput && passInput) {
+            if (currentWifiMode === 0) {
+                wifiSettings.ap.ssid = ssidInput.value;
+                wifiSettings.ap.pass = passInput.value;
+            } else {
+                wifiSettings.sta.ssid = ssidInput.value;
+                wifiSettings.sta.pass = passInput.value;
+            }
+        }
 
         const payload = {
             heaterPowerW: parseFloat(
@@ -1244,9 +1345,11 @@ async function saveSettings() {
 
 			alertSoundEnabled: document.getElementById('setAlertSound').checked,
 
-            wifiSSID: document.getElementById('setWifiSsid').value,
-
-            wifiPass: document.getElementById('setWifiPass').value
+            wifiMode: currentWifiMode,
+            wifiApSSID: wifiSettings.ap.ssid,
+            wifiApPass: wifiSettings.ap.pass,
+            wifiStaSSID: wifiSettings.sta.ssid,
+            wifiStaPass: wifiSettings.sta.pass
         };
 
         const response = await fetch('saveSettings', {
@@ -1258,14 +1361,34 @@ async function saveSettings() {
         });
 
         if (!response.ok) {
-          throw new Error(`Settings save failed (${response.status})`);
+          const errText = await response.text();
+          throw new Error(errText || `Settings save failed (${response.status})`);
         }
 
         showToast('Settings saved');
 
+        const wifiChanged = (settings.wifiMode !== currentWifiMode) ||
+            (wifiSettings.ap.ssid !== settings.wifiApSSID) ||
+            (wifiSettings.sta.ssid !== settings.wifiStaSSID) ||
+            (wifiSettings.ap.pass.length > 0) ||
+            (wifiSettings.sta.pass.length > 0);
+
+        if (wifiChanged) {
+            const rebootNow = await showConfirm(
+                'Wi-Fi configuration changed. Would you like to reboot the controller now to apply changes?',
+                'Reboot Controller'
+            );
+            if (rebootNow) {
+                try {
+                    await fetch('reboot', { method: 'POST' });
+                    showToast('Rebooting... Accessible at http://mash.local', 'success');
+                } catch (_) {}
+            }
+        }
+
     } catch (e) {
         console.error(e);
-        showToast('Settings save failed', 'error');
+        showToast(e.message || 'Settings save failed', 'error');
     }
 }
 

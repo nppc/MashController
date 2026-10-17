@@ -1,6 +1,7 @@
 #include "WebHandlers.h"
 
 #include <LittleFS.h>
+#include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <Updater.h>
@@ -211,11 +212,22 @@ static void handleCalibrationStatus() {
 
 static void handleGetSettings() {
   SettingsEE &s = storage.settings();
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<768> doc;
 
-  doc["wifiSSID"] = s.wifiSSID;
-  // Password is never echoed back - only whether one is currently set.
-  doc["wifiPassSet"] = strlen(s.wifiPass) > 0;
+  doc["wifiMode"] = s.wifiMode;
+  doc["wifiApSSID"] = s.wifiApSSID;
+  doc["wifiApPassSet"] = strlen(s.wifiApPass) > 0;
+  doc["wifiStaSSID"] = s.wifiStaSSID;
+  doc["wifiStaPassSet"] = strlen(s.wifiStaPass) > 0;
+
+  // Backward compatibility: legacy single wifiSSID field
+  doc["wifiSSID"] = (s.wifiMode == WIFI_MODE_STA) ? s.wifiStaSSID : s.wifiApSSID;
+  doc["wifiPassSet"] = (s.wifiMode == WIFI_MODE_STA) ? (strlen(s.wifiStaPass) > 0) : (strlen(s.wifiApPass) > 0);
+
+  const bool isStaConnected = (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED);
+  doc["wifiActiveMode"] = isStaConnected ? "STA" : "AP";
+  doc["wifiIP"] = isStaConnected ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+
   doc["heaterPowerW"] = s.heaterPowerW;
   doc["heaterPowerEffW"] = s.heaterPowerEffW;
   doc["heaterTauSec"] = s.heaterTauSec;
@@ -262,20 +274,66 @@ static void handleSaveSettings() {
 
   SettingsEE &s = storage.settings();
 
-  if (doc.containsKey("wifiSSID")) {
-    strncpy(s.wifiSSID, doc["wifiSSID"] | s.wifiSSID, STORAGE_SSID_LEN - 1);
-    s.wifiSSID[STORAGE_SSID_LEN - 1] = '\0';
+  if (doc.containsKey("wifiMode")) {
+    s.wifiMode = (doc["wifiMode"].as<uint8_t>() == 1) ? WIFI_MODE_STA : WIFI_MODE_AP;
   }
-  // Only overwrite the stored password if a non-empty one was actually sent,
-  // so the frontend can leave the password field blank to "keep current".
-  if (doc.containsKey("wifiPass") && strlen(doc["wifiPass"] | "") > 0) {
-    const char *password = doc["wifiPass"] | "";
+
+  // Backward compatibility: handle legacy single wifiSSID field from cached UI
+  if (doc.containsKey("wifiSSID") && !doc.containsKey("wifiApSSID") && !doc.containsKey("wifiStaSSID")) {
+    const char *oldSsid = doc["wifiSSID"] | "";
+    if (s.wifiMode == WIFI_MODE_STA) {
+      strncpy(s.wifiStaSSID, oldSsid, STORAGE_SSID_LEN - 1);
+      s.wifiStaSSID[STORAGE_SSID_LEN - 1] = '\0';
+    } else {
+      strncpy(s.wifiApSSID, oldSsid, STORAGE_SSID_LEN - 1);
+      s.wifiApSSID[STORAGE_SSID_LEN - 1] = '\0';
+    }
+  }
+
+  // Backward compatibility: handle legacy single wifiPass field from cached UI
+  if (doc.containsKey("wifiPass") && !doc.containsKey("wifiApPass") && !doc.containsKey("wifiStaPass")) {
+    const char *oldPass = doc["wifiPass"] | "";
+    if (strlen(oldPass) > 0) {
+      if (s.wifiMode == WIFI_MODE_STA) {
+        strncpy(s.wifiStaPass, oldPass, STORAGE_PASS_LEN - 1);
+        s.wifiStaPass[STORAGE_PASS_LEN - 1] = '\0';
+      } else {
+        strncpy(s.wifiApPass, oldPass, STORAGE_PASS_LEN - 1);
+        s.wifiApPass[STORAGE_PASS_LEN - 1] = '\0';
+      }
+    }
+  }
+
+  if (doc.containsKey("wifiApSSID")) {
+    const char *apSsid = doc["wifiApSSID"] | "";
+    if (strlen(apSsid) > 0) {
+      strncpy(s.wifiApSSID, apSsid, STORAGE_SSID_LEN - 1);
+      s.wifiApSSID[STORAGE_SSID_LEN - 1] = '\0';
+    }
+  }
+
+  if (doc.containsKey("wifiApPass") && strlen(doc["wifiApPass"] | "") > 0) {
+    const char *password = doc["wifiApPass"] | "";
     if (strlen(password) < 8) {
-      server.send(400, "text/plain", "WiFi password must be at least 8 characters");
+      server.send(400, "text/plain", "AP password must be at least 8 characters (or empty for open)");
       return;
     }
-    strncpy(s.wifiPass, doc["wifiPass"], STORAGE_PASS_LEN - 1);
-    s.wifiPass[STORAGE_PASS_LEN - 1] = '\0';
+    strncpy(s.wifiApPass, password, STORAGE_PASS_LEN - 1);
+    s.wifiApPass[STORAGE_PASS_LEN - 1] = '\0';
+  } else if (doc["wifiApPassClear"].as<bool>()) {
+    s.wifiApPass[0] = '\0';
+  }
+
+  if (doc.containsKey("wifiStaSSID")) {
+    strncpy(s.wifiStaSSID, doc["wifiStaSSID"] | "", STORAGE_SSID_LEN - 1);
+    s.wifiStaSSID[STORAGE_SSID_LEN - 1] = '\0';
+  }
+
+  if (doc.containsKey("wifiStaPass") && strlen(doc["wifiStaPass"] | "") > 0) {
+    strncpy(s.wifiStaPass, doc["wifiStaPass"] | "", STORAGE_PASS_LEN - 1);
+    s.wifiStaPass[STORAGE_PASS_LEN - 1] = '\0';
+  } else if (doc["wifiStaPassClear"].as<bool>()) {
+    s.wifiStaPass[0] = '\0';
   }
   if (doc["heaterPowerW"].is<float>()) {
     s.heaterPowerW = constrain(doc["heaterPowerW"].as<float>(), 1.0f, 10000.0f);
@@ -678,6 +736,11 @@ void webHandlersInit() {
   server.on("/calibrationStart", HTTP_POST, handleCalibrationStart);
   server.on("/calibrationStop", HTTP_POST, handleCalibrationStop);
   server.on("/calibrationStatus", HTTP_GET, handleCalibrationStatus);
+  server.on("/reboot", HTTP_POST, []() {
+    server.send(200, "text/plain", "Rebooting...");
+    delay(500);
+    ESP.restart();
+  });
 }
 
 void otaUpdate() {

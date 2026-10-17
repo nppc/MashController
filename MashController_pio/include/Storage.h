@@ -11,18 +11,23 @@
 #define STORAGE_MAX_PROFILES 15    // raise if you need more, plenty of EEPROM headroom
 #define STORAGE_MAX_STEPS    6     // matches Step steps[6] used elsewhere in the sketch
 #define STORAGE_NAME_LEN     24
-#define STORAGE_SSID_LEN     24
-#define STORAGE_PASS_LEN     24
+#define STORAGE_SSID_LEN     33
+#define STORAGE_PASS_LEN     64
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      13            // bump if the struct layout changes
-#define STORAGE_PREVIOUS_VERSION 12        // the ONLY older layout migrated (see Storage.cpp);
+#define STORAGE_VERSION      14            // bump if the struct layout changes
+#define STORAGE_PREVIOUS_VERSION 13        // the ONLY older layout migrated (see Storage.cpp);
                                            // bumping STORAGE_VERSION without updating this
                                            // and the Legacy struct breaks the build on purpose
 
 /* -------------------------------------------------------------------------- */
 /*                              ON-FLASH LAYOUT                               */
 /* -------------------------------------------------------------------------- */
+
+enum WifiModeEE : uint8_t {
+  WIFI_MODE_AP = 0,
+  WIFI_MODE_STA = 1
+};
 
 struct StepEE {
   float    temp;
@@ -38,8 +43,11 @@ struct ProfileEE {
 };
 
 struct SettingsEE {
-  char     wifiSSID[STORAGE_SSID_LEN];
-  char     wifiPass[STORAGE_PASS_LEN];
+  uint8_t  wifiMode;
+  char     wifiApSSID[STORAGE_SSID_LEN];
+  char     wifiApPass[STORAGE_PASS_LEN];
+  char     wifiStaSSID[STORAGE_SSID_LEN];
+  char     wifiStaPass[STORAGE_PASS_LEN];
   float    heaterPowerW;         // installed (rated) heater electrical power
   float    heaterPowerEffW;      // calibrated power that reaches the water
   float    heaterTauSec;         // calibrated time constant of the stored heat

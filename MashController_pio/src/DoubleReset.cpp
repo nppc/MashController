@@ -37,7 +37,8 @@ bool detectDoubleReset() {
 
 void resetApCredentialsToDefaults() {
   SettingsEE &settings = storage.settings();
-  memset(settings.wifiSSID, 0, sizeof(settings.wifiSSID));
-  memset(settings.wifiPass, 0, sizeof(settings.wifiPass));
-  strncpy(settings.wifiSSID, "MashController", sizeof(settings.wifiSSID) - 1);
+  settings.wifiMode = WIFI_MODE_AP;
+  memset(settings.wifiApSSID, 0, sizeof(settings.wifiApSSID));
+  memset(settings.wifiApPass, 0, sizeof(settings.wifiApPass));
+  strncpy(settings.wifiApSSID, "MashController", sizeof(settings.wifiApSSID) - 1);
 }

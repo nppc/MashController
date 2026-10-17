@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266NetBIOS.h>
 #include <ESP8266WebServer.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
@@ -56,36 +58,84 @@ void setup() {
   }
 
   SettingsEE &s = storage.settings();
-  s.wifiSSID[STORAGE_SSID_LEN - 1] = '\0';
-  s.wifiPass[STORAGE_PASS_LEN - 1] = '\0';
+  s.wifiApSSID[STORAGE_SSID_LEN - 1] = '\0';
+  s.wifiApPass[STORAGE_PASS_LEN - 1] = '\0';
+  s.wifiStaSSID[STORAGE_SSID_LEN - 1] = '\0';
+  s.wifiStaPass[STORAGE_PASS_LEN - 1] = '\0';
 
-  if (strlen(s.wifiSSID) == 0) {
-    strncpy(s.wifiSSID, "MashController", STORAGE_SSID_LEN - 1);
-    s.wifiSSID[STORAGE_SSID_LEN - 1] = '\0';
+  if (strlen(s.wifiApSSID) == 0) {
+    strncpy(s.wifiApSSID, "MashController", STORAGE_SSID_LEN - 1);
+    s.wifiApSSID[STORAGE_SSID_LEN - 1] = '\0';
   }
 
-  WiFi.mode(WIFI_AP);
   WiFi.persistent(false);
-  Serial.println("Starting WiFi AP...");
+  WiFi.setAutoReconnect(true);
 
-  bool apStarted = false;
-  const size_t passwordLength = strlen(s.wifiPass);
-  if (passwordLength == 0) {
-    apStarted = WiFi.softAP(s.wifiSSID);
-  } else if (passwordLength >= 8) {
-    apStarted = WiFi.softAP(s.wifiSSID, s.wifiPass);
-  } else {
-    Serial.println("WiFi AP password is too short; starting open AP");
-    apStarted = WiFi.softAP(s.wifiSSID);
+  // Set device hostname so router DHCP assigns "mash" in local DNS
+  WiFi.hostname("mash");
+
+  bool connectedSta = false;
+  if (s.wifiMode == WIFI_MODE_STA && strlen(s.wifiStaSSID) > 0) {
+    // Pure Station mode: connect to external router, keep AP off
+    WiFi.softAPdisconnect(true);
+    WiFi.disconnect();
+    WiFi.mode(WIFI_STA);
+
+    Serial.print("Connecting to external WiFi: ");
+    Serial.println(s.wifiStaSSID);
+
+    if (strlen(s.wifiStaPass) > 0) {
+      WiFi.begin(s.wifiStaSSID, s.wifiStaPass);
+    } else {
+      WiFi.begin(s.wifiStaSSID);
+    }
+
+    unsigned long startAttemptTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
+      delay(250);
+      Serial.print(".");
+    }
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED) {
+      connectedSta = true;
+      Serial.print("WiFi connected to router! Station IP: ");
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.println("Warning: could not connect to router within 15s. Falling back to Local AP...");
+    }
   }
 
-  if (apStarted) {
-    Serial.print("WiFi AP started: ");
-    Serial.println(s.wifiSSID);
+  if (!connectedSta) {
+    // Pure Local AP mode (either selected, or fallback if router connection failed)
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_AP);
+    Serial.println("Starting WiFi in Local AP mode...");
+
+    const size_t passwordLength = strlen(s.wifiApPass);
+    if (passwordLength == 0) {
+      WiFi.softAP(s.wifiApSSID);
+    } else if (passwordLength >= 8) {
+      WiFi.softAP(s.wifiApSSID, s.wifiApPass);
+    } else {
+      Serial.println("WiFi AP password is too short; starting open AP");
+      WiFi.softAP(s.wifiApSSID);
+    }
+
+    Serial.print("AP SSID: ");
+    Serial.println(s.wifiApSSID);
     Serial.print("AP IP: ");
     Serial.println(WiFi.softAPIP());
+  }
+
+  // NetBIOS: Allows Windows PC to resolve http://mash directly without mDNS
+  NBNS.begin("mash");
+
+  if (MDNS.begin("mash")) {
+    Serial.println("mDNS responder started: http://mash.local");
+    MDNS.addService("http", "tcp", 80);
   } else {
-    Serial.println("ERROR: WiFi AP failed to start");
+    Serial.println("ERROR: mDNS responder failed to start");
   }
 
   Serial.println("Registering HTTP handlers...");
@@ -99,6 +149,7 @@ void setup() {
 /* -------------------------------------------------------------------------- */
 
 void loop() {
+  MDNS.update();
   server.handleClient();
   otaUpdate();
   calibrationUpdate();
