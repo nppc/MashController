@@ -1381,8 +1381,9 @@ async function saveSettings() {
             if (rebootNow) {
                 try {
                     await fetch('reboot', { method: 'POST' });
-                    showToast('Rebooting... Accessible at http://mash.local', 'success');
                 } catch (_) {}
+                window.location.href = '/reboot.html?msg=Wi-Fi+settings+saved.+Controller+is+restarting...';
+                return;
             }
         }
 
@@ -1390,6 +1391,19 @@ async function saveSettings() {
         console.error(e);
         showToast(e.message || 'Settings save failed', 'error');
     }
+}
+
+async function rebootController() {
+    const ok = await showConfirm(
+        'Are you sure you want to reboot the controller?',
+        'Reboot Controller'
+    );
+    if (!ok) return;
+
+    try {
+        await fetch('reboot', { method: 'POST' });
+    } catch (_) {}
+    window.location.href = '/reboot.html?msg=Controller+is+restarting...';
 }
 
 

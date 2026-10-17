@@ -116,6 +116,8 @@
         progressDetail.textContent = `0 B of ${formatBytes(file.size)}`;
         buttons.forEach((control) => { control.disabled = true; });
 
+        let uploadFinished = false;
+
         request.upload.addEventListener('progress', (progressEvent) => {
           if (!progressEvent.lengthComputable) {
             progressStatus.textContent = `Uploading ${file.name}`;
@@ -124,6 +126,7 @@
           }
 
           const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+          if (percent >= 100) uploadFinished = true;
           progressFill.style.width = `${percent}%`;
           progressPercent.textContent = `${percent}%`;
           progressDetail.textContent = `${formatBytes(progressEvent.loaded)} of ${formatBytes(progressEvent.total)}`;
@@ -135,9 +138,12 @@
             progressFill.classList.remove('active');
             progressPercent.textContent = '100%';
             progressStatus.textContent = 'Upload complete';
-            progressDetail.textContent = 'The controller is restarting. Wait a few seconds before reconnecting.';
+            progressDetail.textContent = 'Restarting controller...';
             remaining = null;
             renderCountdown();
+            setTimeout(() => {
+              window.location.href = '/reboot.html?msg=Update+successful.+Controller+is+restarting...';
+            }, 600);
           } else {
             progressStatus.textContent = 'Upload failed';
             progressDetail.textContent = request.responseText || `Device returned HTTP ${request.status}`;
@@ -148,11 +154,15 @@
         });
 
         request.addEventListener('error', () => {
-          progressStatus.textContent = 'Upload connection lost';
-          progressDetail.textContent = 'The device may be restarting. Wait a few seconds, then check the controller.';
-          progressFill.classList.remove('active');
-          uploadInProgress = false;
-          buttons.forEach((control) => { control.disabled = false; });
+          if (uploadFinished) {
+            window.location.href = '/reboot.html?msg=Update+successful.+Controller+is+restarting...';
+          } else {
+            progressStatus.textContent = 'Upload connection lost';
+            progressDetail.textContent = 'The device may be restarting. Wait a few seconds, then check the controller.';
+            progressFill.classList.remove('active');
+            uploadInProgress = false;
+            buttons.forEach((control) => { control.disabled = false; });
+          }
         });
 
         request.open('POST', form.action);

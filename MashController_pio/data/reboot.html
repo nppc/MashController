@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>Rebooting | Mash Controller</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div class="header">
+      <h1>Rebooting...</h1>
+      <span class="status-dot"></span>
+    </div>
+
+    <main class="screen active">
+      <section class="stat-card reboot-card">
+        <div class="reboot-icon-wrap">
+          <div class="reboot-spinner"></div>
+          <div class="reboot-pulse-ring"></div>
+        </div>
+        <h2 class="reboot-title">Controller is Restarting</h2>
+        <p class="reboot-subtitle" id="rebootMsg">The controller is restarting. Please wait while it reconnects...</p>
+
+        <div class="reboot-countdown-box">
+          <div class="reboot-countdown-label">Reconnecting in</div>
+          <div class="reboot-countdown-val"><span id="countdown">15</span><span class="reboot-sec">s</span></div>
+          <div class="reboot-track">
+            <div id="rebootBar" class="reboot-bar"></div>
+          </div>
+        </div>
+
+        <div class="reboot-actions">
+          <a href="/" id="reconnectBtn" class="btn green reboot-btn">Reconnect Now</a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+  (() => {
+    const params = new URLSearchParams(window.location.search);
+    const customMsg = params.get('msg');
+    const rebootMsg = document.getElementById('rebootMsg');
+    if (customMsg && rebootMsg) {
+      rebootMsg.textContent = customMsg;
+    }
+
+    const totalSeconds = 15;
+    let remaining = totalSeconds;
+    let redirected = false;
+    const countdown = document.getElementById('countdown');
+    const rebootBar = document.getElementById('rebootBar');
+
+    const checkOnline = () => {
+      fetch('/status', { cache: 'no-store' })
+        .then(response => {
+          if (response.ok && !redirected) {
+            redirected = true;
+            rebootMsg.textContent = 'Controller is online! Redirecting...';
+            if (rebootBar) rebootBar.style.width = '0%';
+            setTimeout(() => { window.location.href = '/'; }, 500);
+          }
+        })
+        .catch(() => {});
+    };
+
+    const timer = setInterval(() => {
+      remaining--;
+      if (countdown) countdown.textContent = Math.max(0, remaining);
+      if (rebootBar) {
+        rebootBar.style.width = Math.max(0, (remaining / totalSeconds) * 100) + '%';
+      }
+
+      if (remaining <= 5 && remaining > 0) {
+        checkOnline();
+      }
+
+      if (remaining <= 0) {
+        clearInterval(timer);
+        rebootMsg.textContent = 'Connecting to controller...';
+        let attempts = 0;
+        const pollTimer = setInterval(() => {
+          attempts++;
+          fetch('/status', { cache: 'no-store' })
+            .then(response => {
+              if (response.ok && !redirected) {
+                redirected = true;
+                clearInterval(pollTimer);
+                window.location.href = '/';
+              }
+            })
+            .catch(() => {});
+
+          if (attempts >= 12) {
+            clearInterval(pollTimer);
+            if (!redirected) window.location.href = '/';
+          }
+        }, 1500);
+      }
+    }, 1000);
+  })();
+  </script>
+</body>
+</html>
+

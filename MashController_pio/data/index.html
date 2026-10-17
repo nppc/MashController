@@ -20,6 +20,7 @@
   <div class="menu-item" onclick="openScreen('profiles')">Profiles</div>
   <div class="menu-item" onclick="openScreen('settings')">Settings</div>
 	<a class="menu-item" href="enable-ota">Firmware Update</a>
+  <div class="menu-item" onclick="closeSideMenu(); rebootController();" style="color:var(--accent); margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">Reboot Controller</div>
 </div>
 <div id="sideMenuBackdrop"></div>
 
@@ -462,10 +463,16 @@
 		</div>
 	  </div>
 
-	  <button class="btn green settings-save-btn"
-			  onclick="saveSettings()">
-		Save Settings
-	  </button>
+	  <div style="display:flex; gap:10px; margin-top:16px;">
+		<button class="btn green settings-save-btn" style="flex:2; margin-top:0;"
+				onclick="saveSettings()">
+		  Save Settings
+		</button>
+		<button class="btn gray" style="flex:1; margin-top:0;"
+				onclick="rebootController()">
+		  Reboot
+		</button>
+	  </div>
 
 	</div>
 

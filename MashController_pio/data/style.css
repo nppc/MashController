@@ -1544,3 +1544,124 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .fan-spin { animation: none; }
 }
+
+/* Reboot Screen */
+.reboot-card {
+  margin: 20px auto;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.reboot-icon-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reboot-spinner {
+  width: 52px;
+  height: 52px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent2);
+  border-radius: 50%;
+  animation: reboot-spin 1s linear infinite;
+}
+
+.reboot-pulse-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--accent2);
+  opacity: 0;
+  animation: reboot-pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+@keyframes reboot-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes reboot-pulse {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.reboot-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.reboot-subtitle {
+  margin: 0 auto 20px;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  max-width: 420px;
+}
+
+.reboot-countdown-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.reboot-countdown-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reboot-countdown-val {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--accent2);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin: 4px 0 12px;
+}
+
+.reboot-sec {
+  font-size: 20px;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.reboot-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.reboot-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--accent2);
+  border-radius: 999px;
+  transition: width 1s linear;
+}
+
+.reboot-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.reboot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+  height: 44px;
+  padding: 0 24px;
+  text-decoration: none;
+  font-size: 15px;
+}

@@ -57,7 +57,7 @@ static void handleFileRead(String path) {
     File file = LittleFS.open(gzPath, "r");
 
     // apply same caching rules for gzipped version
-    if (path == "/ota.html") {
+    if (path == "/ota.html" || path == "/reboot.html" || path == "/reboot.htm") {
       server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       server.sendHeader("Pragma", "no-cache");
     } else if (path == "/chart.js" || path.endsWith(".png")) {
@@ -75,7 +75,7 @@ static void handleFileRead(String path) {
   if (LittleFS.exists(path)) {
     File file = LittleFS.open(path, "r");
 
-    if (path == "/ota.html") {
+    if (path == "/ota.html" || path == "/reboot.html" || path == "/reboot.htm") {
       server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       server.sendHeader("Pragma", "no-cache");
     } else if (path == "/chart.js" || path.endsWith(".png")) {
@@ -736,6 +736,9 @@ void webHandlersInit() {
   server.on("/calibrationStart", HTTP_POST, handleCalibrationStart);
   server.on("/calibrationStop", HTTP_POST, handleCalibrationStop);
   server.on("/calibrationStatus", HTTP_GET, handleCalibrationStatus);
+  server.on("/reboot.html", []() { handleFileRead("/reboot.html"); });
+  server.on("/reboot.htm", []() { handleFileRead("/reboot.html"); });
+  server.on("/reboot", HTTP_GET, []() { handleFileRead("/reboot.html"); });
   server.on("/reboot", HTTP_POST, []() {
     server.send(200, "text/plain", "Rebooting...");
     delay(500);
