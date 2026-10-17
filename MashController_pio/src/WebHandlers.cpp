@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <Updater.h>
+#include <Ticker.h>
 
 #include "Storage.h"
 #include "Sensor.h"
@@ -20,6 +21,14 @@ ESP8266WebServer server(80);
 bool otaEnabled = false;
 
 namespace {
+Ticker restartTicker;
+
+void scheduleRestart(uint32_t delayMs = 1000) {
+  restartTicker.once_ms(delayMs, []() {
+    ESP.restart();
+  });
+}
+
 bool otaStarted = false;
 unsigned long otaActivatedAt = 0;
 constexpr unsigned long OTA_TIMEOUT_MS = 5UL * 60UL * 1000UL;
@@ -632,8 +641,7 @@ static void handleUpdateResult() {
   }
 
   server.send(200, "text/plain", "Update successful. Restarting...");
-  delay(100);
-  ESP.restart();
+  scheduleRestart(2000);
 }
 
 static void handleStatus() {
@@ -741,8 +749,7 @@ void webHandlersInit() {
   server.on("/reboot", HTTP_GET, []() { handleFileRead("/reboot.html"); });
   server.on("/reboot", HTTP_POST, []() {
     server.send(200, "text/plain", "Rebooting...");
-    delay(500);
-    ESP.restart();
+    scheduleRestart(1000);
   });
 }
 

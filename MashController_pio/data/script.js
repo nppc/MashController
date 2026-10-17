@@ -1379,10 +1379,7 @@ async function saveSettings() {
                 'Reboot Controller'
             );
             if (rebootNow) {
-                try {
-                    await fetch('reboot', { method: 'POST' });
-                } catch (_) {}
-                window.location.href = '/reboot.html?msg=Wi-Fi+settings+saved.+Controller+is+restarting...';
+                window.location.href = '/reboot.html?trigger=1&msg=Wi-Fi+settings+saved.+Controller+is+restarting...';
                 return;
             }
         }
@@ -1400,10 +1397,7 @@ async function rebootController() {
     );
     if (!ok) return;
 
-    try {
-        await fetch('reboot', { method: 'POST' });
-    } catch (_) {}
-    window.location.href = '/reboot.html?msg=Controller+is+restarting...';
+    window.location.href = '/reboot.html?trigger=1&msg=Controller+is+restarting...';
 }
 
 

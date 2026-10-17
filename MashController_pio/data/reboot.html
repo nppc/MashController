@@ -48,6 +48,10 @@
       rebootMsg.textContent = customMsg;
     }
 
+    if (params.get('trigger') === '1' || params.get('reboot') === '1') {
+      fetch('/reboot', { method: 'POST' }).catch(() => {});
+    }
+
     const totalSeconds = 15;
     let remaining = totalSeconds;
     let redirected = false;

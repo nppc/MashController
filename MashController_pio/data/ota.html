@@ -6,6 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Firmware Update | Mash Controller</title>
   <link rel="stylesheet" href="style.css?v=ota-progress-2">
+  <link rel="prefetch" href="reboot.html">
 </head>
 <body>
   <div id="app">
@@ -134,16 +135,7 @@
 
         request.addEventListener('load', () => {
           if (request.status >= 200 && request.status < 300) {
-            progressFill.style.width = '100%';
-            progressFill.classList.remove('active');
-            progressPercent.textContent = '100%';
-            progressStatus.textContent = 'Upload complete';
-            progressDetail.textContent = 'Restarting controller...';
-            remaining = null;
-            renderCountdown();
-            setTimeout(() => {
-              window.location.href = '/reboot.html?msg=Update+successful.+Controller+is+restarting...';
-            }, 600);
+            window.location.href = '/reboot.html?msg=Update+successful.+Controller+is+restarting...';
           } else {
             progressStatus.textContent = 'Upload failed';
             progressDetail.textContent = request.responseText || `Device returned HTTP ${request.status}`;
