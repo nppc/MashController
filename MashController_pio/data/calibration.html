@@ -32,45 +32,51 @@
 
         <p class="calibration-lead">
           The element and pot base store heat while the heater is on. After switch-off
-          that heat keeps flowing into the water, so the temperature keeps rising.
-          A short pulse stores little heat; a long heat stores the most. The controller
-          tracks this stored heat and switches off early by the right amount.
+          that heat keeps flowing into the water, causing temperature overshoot.
+          Because water viscosity drops and kettle convection speeds up as water warms,
+          heating dynamics and heat loss change significantly between low rests (e.g. 50 °C)
+          and high rests (e.g. 70 °C).
+        </p>
+
+        <h2>Dual-Anchor Calibration (50 °C &amp; 70 °C)</h2>
+        <p>
+          The automated test measures thermal parameters at two fixed anchors:
+          <strong>50 °C</strong> (low mash rests) and <strong>70 °C</strong> (saccharification / mash-out).
+          During brewing, the controller dynamically interpolates between these anchors to guarantee
+          dead-on accuracy across your entire mash schedule.
         </p>
 
         <h2>Time Constant (τ)</h2>
         <p>
-          How quickly stored heat reaches the sensor, in seconds. It combines the element,
-          the pot base, mixing and the sensor itself. After a long heat the stored energy is
-          about effective power × τ.
+          How quickly stored heat transfers from element to the temperature sensor, in seconds.
+          As water warms and thins, convection speeds up, so τ decreases.
         </p>
 
         <h2>Effective Power</h2>
         <p>
-          The power that actually reaches the water, measured from the heating rate.
-          It is usually a little below the rated power.
+          The true heating power that reaches the water, measured from the heating rate.
         </p>
 
         <h2>Store Gain</h2>
         <p>
-          The measured overshoot divided by effective power × τ. It is usually a little
-          above 1, because sensor lag and mixing make the overshoot look larger than the
-          element's stored heat alone. The controller scales its prediction by it.
+          Ratio of total measured rise to pure element thermal capacity. It accounts for pot base
+          retention and sensor response characteristics.
         </p>
 
-        <h2>Heat Loss</h2>
+        <h2>Dynamic Heat Loss</h2>
         <p>
-          How fast the pot loses heat to the room, in watts per °C above room temperature.
-          This is what the heater has to make up during a rest.
+          The kettle's heat loss to the room in watts, fit to a non-linear power law curve
+          between 50 °C and 70 °C.
         </p>
       </section>
 
       <section class="stat-card">
         <div class="label">Prepare the Test</div>
         <ol class="calibration-steps">
-          <li>Fill the pot with the volume of plain water you normally mash with, at least 15 °C below the target. Cold tap water is best.</li>
+          <li>Fill the pot with the volume of plain water you normally mash with. Cold tap water (15–20 °C) is ideal.</li>
           <li>Keep the sensor, lid, mixer and mixer cycle exactly as during brewing. The mixer runs its normal cycle during the test.</li>
           <li>In Settings, enter the heater's rated <strong>Heater Power</strong> so the page can compare it with the measured value.</li>
-          <li>Set the target to your usual rest temperature. For 20 L the test takes roughly 45-75 minutes.</li>
+          <li>The test runs automatically in two sequential stages: it heats to 50 °C, detects the peak and confirmed cooling drop, then heats to 70 °C and waits for the final peak drop.</li>
         </ol>
       </section>
 
@@ -91,10 +97,6 @@
           <label class="calibration-volume">
             <span>Water volume (litres)</span>
             <input id="calibrationWaterLiters" class="input-small" type="number" min="0.1" max="100" step="0.1" value="10">
-          </label>
-          <label class="calibration-volume">
-            <span>Target temperature (°C)</span>
-            <input id="calibrationTargetC" class="input-small" type="number" min="40" max="80" step="0.5" value="65">
           </label>
           <label class="calibration-volume">
             <span>Room temperature (°C)</span>
@@ -138,22 +140,21 @@
         <div class="label">How the Result Is Calculated</div>
         <p>
           The sensor is read every 2 seconds and the readings are averaged over each
-          full mixer cycle (mixing plus rest), which cancels the ripple the mixer causes.
-          The controller averages the same way during brewing.
-          The heater runs at full power until the target is reached, then switches off.
-          Logging continues until the peak has passed and the water has started to cool.
+          full mixer cycle, matching the controller's brewing filter.
+          The test heats to 50 °C, turns off the heater, and watches for the overshoot peak
+          and a confirmed drop. It then immediately switches back on to ramp to 70 °C and detects
+          the second peak and drop.
         </p>
         <div class="formula-block">
           <div><strong>Coast fit</strong>: T(t) = T_off + ΔT·(1 − e<sup>−t/τ</sup>) − r·t</div>
           <div><strong>C_w</strong> = water volume × 4186 J/°C</div>
-          <div><strong>Heat loss</strong> = r × C_w / (T_water − T_room)</div>
-          <div><strong>Effective power</strong> = C_w × heating rate + heat loss</div>
-          <div><strong>Store gain</strong> = ΔT × C_w / (effective power × τ)</div>
+          <div><strong>Loss P(T)</strong> = P_1 · (ΔT / ΔT_1)<sup>α</sup></div>
+          <div><strong>τ(T)</strong> = τ_1 + (τ_2 − τ_1) · (T − 50) / 20</div>
+          <div><strong>Store gain(T)</strong> = S_1 + (S_2 − S_1) · (T − 50) / 20</div>
         </div>
         <p class="calibration-note">
-          The page warns when the result is uncertain, for example when the heating was too
-          short, the peak had not clearly passed, or the two power estimates disagree.
           Do not add grain during calibration and never leave the heater running unattended.
+          Once complete, click <strong>Use these values</strong> to save both anchors to the controller.
         </p>
       </section>
 

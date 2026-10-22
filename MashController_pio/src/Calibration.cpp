@@ -20,17 +20,12 @@ namespace {
 constexpr unsigned long MIN_BLOCK_MS = 15UL * 1000UL;
 constexpr unsigned long MAX_BLOCK_MS = 60UL * 1000UL;
 
-constexpr float DEFAULT_TARGET_C = 65.0f;
-constexpr float MIN_TARGET_C = 40.0f;
-constexpr float MAX_TARGET_C = 80.0f;
+constexpr float TARGET_1_C = 50.0f;
+constexpr float TARGET_2_C = 70.0f;
 constexpr float MIN_RISE_C = 15.0f;
 
 constexpr unsigned long MAX_HEAT_MS = 120UL * 60UL * 1000UL;
-// After switch-off, keep logging until the peak is at least PEAK_SETTLE_MS old
-// and the coast has lasted MIN_COAST_MS and 2.5x the time to peak.
-constexpr unsigned long MIN_COAST_MS = 10UL * 60UL * 1000UL;
-constexpr unsigned long PEAK_SETTLE_MS = 5UL * 60UL * 1000UL;
-constexpr unsigned long MAX_COAST_MS = 40UL * 60UL * 1000UL;
+constexpr unsigned long MAX_COAST_MS = 25UL * 60UL * 1000UL;
 constexpr unsigned long SENSOR_FAIL_MS = 15UL * 1000UL;
 
 // 160 min at one sample per 15-20 s mixer cycle, 4 bytes each.
@@ -39,13 +34,15 @@ constexpr uint16_t MAX_SAMPLES_PER_RESPONSE = 100;
 
 enum Phase : uint8_t {
   PHASE_IDLE = 0,
-  PHASE_HEATING = 1,
-  PHASE_COASTING = 2,
-  PHASE_COMPLETE = 3,
-  PHASE_TIMEOUT = 4,
-  PHASE_SENSOR_FAIL = 5,
-  PHASE_STOPPED = 6,
-  PHASE_LOG_FULL = 7
+  PHASE_HEATING_1 = 1,
+  PHASE_COASTING_1 = 2,
+  PHASE_HEATING_2 = 3,
+  PHASE_COASTING_2 = 4,
+  PHASE_COMPLETE = 5,
+  PHASE_TIMEOUT = 6,
+  PHASE_SENSOR_FAIL = 7,
+  PHASE_STOPPED = 8,
+  PHASE_LOG_FULL = 9
 };
 
 bool active = false;
@@ -55,8 +52,7 @@ uint16_t runId = 0;
 const char *lastError = "";
 
 float waterLiters = 20.0f;
-float targetC = DEFAULT_TARGET_C;
-float ambientC = NAN;  // unknown until a run sets it; status falls back to live settings
+float ambientC = NAN;
 float currentTemp = NAN;
 
 unsigned long startedAt = 0;
@@ -65,12 +61,20 @@ unsigned long finishedElapsedMs = 0;
 int lastHistIndex = 0;
 bool lastMixerOn = false;
 
-bool heatEnded = false;
-unsigned long heatEndMs = 0;  // relative to startedAt
+// Step 1
+unsigned long heatEndMs1 = 0;
+bool peakSeen1 = false;
+float peakTemp1 = 0.0f;
+unsigned long peakCoastMs1 = 0;
+uint8_t dropBlocks1 = 0;
+unsigned long step2StartMs = 0;
 
-bool peakSeen = false;
-float peakTemp = 0.0f;
-unsigned long peakCoastMs = 0;  // relative to heatEndMs
+// Step 2
+unsigned long heatEndMs2 = 0;
+bool peakSeen2 = false;
+float peakTemp2 = 0.0f;
+unsigned long peakCoastMs2 = 0;
+uint8_t dropBlocks2 = 0;
 
 float blockSum = 0.0f;
 uint8_t blockCount = 0;
@@ -95,10 +99,24 @@ void closeBlock() {
     sampleCentiC[sampleCount] = (int16_t)lroundf(mean * 100.0f);
     sampleCount++;
   }
-  if (phase == PHASE_COASTING && (!peakSeen || mean > peakTemp)) {
-    peakSeen = true;
-    peakTemp = mean;
-    peakCoastMs = midMs - heatEndMs;
+  if (phase == PHASE_COASTING_1) {
+    if (!peakSeen1 || mean > peakTemp1) {
+      peakSeen1 = true;
+      peakTemp1 = mean;
+      peakCoastMs1 = midMs - heatEndMs1;
+      dropBlocks1 = 0;
+    } else if (peakSeen1 && mean <= peakTemp1 - 0.06f) {
+      dropBlocks1++;
+    }
+  } else if (phase == PHASE_COASTING_2) {
+    if (!peakSeen2 || mean > peakTemp2) {
+      peakSeen2 = true;
+      peakTemp2 = mean;
+      peakCoastMs2 = midMs - heatEndMs2;
+      dropBlocks2 = 0;
+    } else if (peakSeen2 && mean <= peakTemp2 - 0.06f) {
+      dropBlocks2++;
+    }
   }
   blockSum = 0.0f;
   blockCount = 0;
@@ -164,10 +182,14 @@ const char *calibrationLastError() {
 }
 
 bool calibrationStart(float newWaterLiters) {
-  return calibrationStart(newWaterLiters, DEFAULT_TARGET_C, storage.settings().heaterAmbientC);
+  return calibrationStart(newWaterLiters, TARGET_1_C, storage.settings().heaterAmbientC);
 }
 
-bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC) {
+bool calibrationStart(float newWaterLiters, float newAmbientC) {
+  return calibrationStart(newWaterLiters, TARGET_1_C, newAmbientC);
+}
+
+bool calibrationStart(float newWaterLiters, float /*targetC*/, float newAmbientC) {
   lastError = "";
   if (active || isRunning || inCoolDown) {
     lastError = "Controller is busy";
@@ -182,10 +204,6 @@ bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC)
     lastError = "Water volume must be 0.1-100 litres";
     return false;
   }
-  if (!(newTargetC >= MIN_TARGET_C && newTargetC <= MAX_TARGET_C)) {
-    lastError = "Target must be 40-80 C";
-    return false;
-  }
   if (!(newAmbientC >= -10.0f && newAmbientC <= 45.0f)) {
     lastError = "Room temperature must be -10-45 C";
     return false;
@@ -195,8 +213,8 @@ bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC)
     lastError = "Temperature reading is invalid";
     return false;
   }
-  if (newTargetC - startTemp < MIN_RISE_C) {
-    lastError = "Water must start at least 15 C below the target";
+  if (TARGET_1_C - startTemp < MIN_RISE_C) {
+    lastError = "Water must start at least 15 C below 50 C (<= 35 C)";
     return false;
   }
 
@@ -218,7 +236,6 @@ bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC)
   }  
 
   waterLiters = newWaterLiters;
-  targetC = newTargetC;
   ambientC = newAmbientC;
   currentTemp = startTemp;
 
@@ -226,30 +243,37 @@ bool calibrationStart(float newWaterLiters, float newTargetC, float newAmbientC)
   lastValidAt = startedAt;
   finishedElapsedMs = 0;
   lastHistIndex = histIndex;
-  heatEnded = false;
-  heatEndMs = 0;
-  peakSeen = false;
-  peakTemp = 0.0f;
-  peakCoastMs = 0;
+
+  heatEndMs1 = 0;
+  peakSeen1 = false;
+  peakTemp1 = 0.0f;
+  peakCoastMs1 = 0;
+  dropBlocks1 = 0;
+  step2StartMs = 0;
+
+  heatEndMs2 = 0;
+  peakSeen2 = false;
+  peakTemp2 = 0.0f;
+  peakCoastMs2 = 0;
+  dropBlocks2 = 0;
+
   blockSum = 0.0f;
   blockCount = 0;
   sampleCount = 0;
-  // Random, so a page left open across a reboot never mixes two runs.
+
   const uint16_t previousRunId = runId;
   do {
     runId = (uint16_t)ESP.random();
   } while (runId == 0 || runId == previousRunId);
 
-  // Mixer runs its normal automatic cycle, the same as during brewing.
   mixerManualMode = false;
   mixerOn = false;
   mixerPhaseStart = startedAt;
   lastMixerOn = false;
 
-  // The first reading is the one already taken; log it as the start point.
   addReading(startTemp, 0);
 
-  phase = PHASE_HEATING;
+  phase = PHASE_HEATING_1;
   heaterOn = true;
   active = true;
   return true;
@@ -279,7 +303,9 @@ void calibrationUpdate() {
       finish(PHASE_SENSOR_FAIL);
       return;
     }
-    if (phase == PHASE_HEATING && elapsed >= MAX_HEAT_MS) finish(PHASE_TIMEOUT);
+    if ((phase == PHASE_HEATING_1 || phase == PHASE_HEATING_2) && elapsed >= MAX_HEAT_MS) {
+      finish(PHASE_TIMEOUT);
+    }
     return;
   }
   lastHistIndex = histIndex;
@@ -289,12 +315,27 @@ void calibrationUpdate() {
   lastValidAt = now;
   currentTemp = reading;
 
-  if (phase == PHASE_HEATING && reading >= targetC) {
+  // Step 1: heating reaches 50 C
+  if (phase == PHASE_HEATING_1 && reading >= TARGET_1_C) {
     heaterOn = false;
-    closeBlock();  // the partial block belongs to the heating phase
-    phase = PHASE_COASTING;
-    heatEnded = true;
-    heatEndMs = elapsed;
+    closeBlock();
+    phase = PHASE_COASTING_1;
+    heatEndMs1 = elapsed;
+    peakSeen1 = false;
+    peakTemp1 = reading;
+    peakCoastMs1 = 0;
+    dropBlocks1 = 0;
+  }
+  // Step 2: heating reaches 70 C
+  else if (phase == PHASE_HEATING_2 && reading >= TARGET_2_C) {
+    heaterOn = false;
+    closeBlock();
+    phase = PHASE_COASTING_2;
+    heatEndMs2 = elapsed;
+    peakSeen2 = false;
+    peakTemp2 = reading;
+    peakCoastMs2 = 0;
+    dropBlocks2 = 0;
   }
 
   addReading(reading, elapsed);
@@ -305,15 +346,27 @@ void calibrationUpdate() {
     return;
   }
 
-  if (phase == PHASE_HEATING && elapsed >= MAX_HEAT_MS) {
-    finish(PHASE_TIMEOUT);
-  } else if (phase == PHASE_COASTING) {
-    const unsigned long coastMs = elapsed - heatEndMs;
-    const bool settled = peakSeen &&
-                         coastMs - peakCoastMs >= PEAK_SETTLE_MS &&
-                         coastMs >= MIN_COAST_MS &&
-                         coastMs >= peakCoastMs * 5UL / 2UL;
-    if (settled || coastMs >= MAX_COAST_MS) finish(PHASE_COMPLETE);
+  if (phase == PHASE_COASTING_1) {
+    const unsigned long coast1Ms = elapsed - heatEndMs1;
+    // Advance to Step 2 when peak has been passed and temperature drop is confirmed (>= 3 drop blocks or 3 min after peak)
+    const bool dropConfirmed1 = peakSeen1 && coast1Ms >= 180000UL &&
+                               (dropBlocks1 >= 3 || (coast1Ms >= peakCoastMs1 + 180000UL) || coast1Ms >= 600000UL);
+    if (dropConfirmed1) {
+      closeBlock();
+      step2StartMs = elapsed;
+      phase = PHASE_HEATING_2;
+      heaterOn = true;
+      lastMixerOn = mixerOn;
+      Serial.println("Calibration: Step 1 coast complete, starting Step 2 heating to 70 C");
+    }
+  } else if (phase == PHASE_COASTING_2) {
+    const unsigned long coast2Ms = elapsed - heatEndMs2;
+    const bool dropConfirmed2 = peakSeen2 && coast2Ms >= 180000UL &&
+                               (dropBlocks2 >= 3 || (coast2Ms >= peakCoastMs2 + 180000UL) || coast2Ms >= 600000UL);
+    if (dropConfirmed2 || coast2Ms >= MAX_COAST_MS) {
+      finish(PHASE_COMPLETE);
+      Serial.println("Calibration: Step 2 coast complete, calibration finished!");
+    }
   }
 }
 
@@ -327,7 +380,7 @@ void calibrationStatusJson(String &out, uint16_t firstSample) {
   if (lastSample > sampleCount) lastSample = sampleCount;
 
   out = "";
-  out.reserve(640 + (size_t)(lastSample - firstSample) * 12);
+  out.reserve(700 + (size_t)(lastSample - firstSample) * 12);
   out += '{';
   appendInt(out, "runId", runId);
   appendBool(out, "active", active);
@@ -336,17 +389,32 @@ void calibrationStatusJson(String &out, uint16_t firstSample) {
   appendBool(out, "heaterOn", heaterOn);
   appendInt(out, "elapsedSec", (long)(elapsedMs / 1000UL));
   appendNumber(out, "currentTemp", isValidReading(temp) ? temp : NAN, 2);
-  appendNumber(out, "targetC", targetC, 1);
+  appendNumber(out, "target1C", TARGET_1_C, 1);
+  appendNumber(out, "target2C", TARGET_2_C, 1);
   appendNumber(out, "ambientC", isfinite(ambientC) ? ambientC : storage.settings().heaterAmbientC, 1);
   appendNumber(out, "waterLiters", waterLiters, 2);
   appendNumber(out, "heaterPowerW", s.heaterPowerW, 0);
   appendInt(out, "mixerCycleSec", (long)s.mixerOnSec + (long)s.mixerRestSec);
-  appendNumber(out, "heatEndSec", heatEnded ? heatEndMs / 1000.0f : NAN, 1);
-  appendNumber(out, "peakTemp", peakSeen ? peakTemp : NAN, 3);
-  appendNumber(out, "peakCoastSec", peakSeen ? peakCoastMs / 1000.0f : NAN, 0);
+
+  // Step 1
+  appendNumber(out, "heatEnd1Sec", heatEndMs1 > 0 ? heatEndMs1 / 1000.0f : NAN, 1);
+  appendNumber(out, "peakTemp1", peakSeen1 ? peakTemp1 : NAN, 2);
+  appendNumber(out, "peakCoast1Sec", peakSeen1 ? peakCoastMs1 / 1000.0f : NAN, 0);
+  appendNumber(out, "step2StartSec", step2StartMs > 0 ? step2StartMs / 1000.0f : NAN, 1);
+
+  // Step 2
+  appendNumber(out, "heatEnd2Sec", heatEndMs2 > 0 ? heatEndMs2 / 1000.0f : NAN, 1);
+  appendNumber(out, "peakTemp2", peakSeen2 ? peakTemp2 : NAN, 2);
+  appendNumber(out, "peakCoast2Sec", peakSeen2 ? peakCoastMs2 / 1000.0f : NAN, 0);
+
+  // Legacy fields for backward compatibility
+  const float currentTarget = phase <= PHASE_COASTING_1 ? TARGET_1_C : TARGET_2_C;
+  appendNumber(out, "targetC", currentTarget, 1);
+  appendNumber(out, "heatEndSec", (phase <= PHASE_COASTING_1 ? heatEndMs1 : heatEndMs2) > 0 ? (phase <= PHASE_COASTING_1 ? heatEndMs1 : heatEndMs2) / 1000.0f : NAN, 1);
+  appendNumber(out, "peakTemp", (phase <= PHASE_COASTING_1 ? peakSeen1 : peakSeen2) ? (phase <= PHASE_COASTING_1 ? peakTemp1 : peakTemp2) : NAN, 2);
+  appendNumber(out, "peakCoastSec", (phase <= PHASE_COASTING_1 ? peakCoastMs1 : peakCoastMs2) ? (phase <= PHASE_COASTING_1 ? peakCoastMs1 : peakCoastMs2) / 1000.0f : NAN, 0);
+
   appendInt(out, "maxHeatSec", (long)(MAX_HEAT_MS / 1000UL));
-  appendInt(out, "minCoastSec", (long)(MIN_COAST_MS / 1000UL));
-  appendInt(out, "peakSettleSec", (long)(PEAK_SETTLE_MS / 1000UL));
   appendInt(out, "maxCoastSec", (long)(MAX_COAST_MS / 1000UL));
   appendInt(out, "maxSamples", MAX_SAMPLES);
   appendInt(out, "sampleCount", sampleCount);

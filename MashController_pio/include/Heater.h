@@ -15,4 +15,10 @@ float heaterPredictedPeak();
 
 float heaterEstimatedSecondsToTarget();
 
+struct SettingsEE;
+float heaterEffectiveTarget(float targetC, const SettingsEE &s);
+float heaterCurrentTauSec(float tempC, const SettingsEE &s);
+float heaterCurrentLossW(float tempC, const SettingsEE &s);
+float heaterCurrentStoreGain(float tempC, const SettingsEE &s);
+
 #endif

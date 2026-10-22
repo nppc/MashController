@@ -245,6 +245,19 @@ static void handleGetSettings() {
   doc["heaterAmbientC"] = s.heaterAmbientC;
   doc["heaterDeadband"] = s.heaterDeadband;
   doc["heaterMinSwitchSec"] = s.heaterMinSwitchSec;
+
+  doc["heaterT1"] = s.heaterT1;
+  doc["heaterTau1"] = s.heaterTau1;
+  doc["heaterLossW1"] = s.heaterLossW1;
+  doc["heaterStoreGain1"] = s.heaterStoreGain1;
+  doc["heaterT2"] = s.heaterT2;
+  doc["heaterTau2"] = s.heaterTau2;
+  doc["heaterLossW2"] = s.heaterLossW2;
+  doc["heaterStoreGain2"] = s.heaterStoreGain2;
+
+  doc["heaterTrimLowC"] = s.heaterTrimLowC;
+  doc["heaterTrimHighC"] = s.heaterTrimHighC;
+  doc["heaterLossScalePct"] = s.heaterLossScalePct;
   doc["mixerOnSec"] = s.mixerOnSec;
   doc["mixerRestSec"] = s.mixerRestSec;
   doc["coolDownSec"] = s.coolDownSec;
@@ -362,6 +375,25 @@ static void handleSaveSettings() {
   if (doc["heaterAmbientC"].is<float>()) {
     s.heaterAmbientC = constrain(doc["heaterAmbientC"].as<float>(), -10.0f, 45.0f);
   }
+  if (doc["heaterTrimLowC"].is<float>()) {
+    s.heaterTrimLowC = constrain(doc["heaterTrimLowC"].as<float>(), -1.0f, 1.0f);
+  }
+  if (doc["heaterTrimHighC"].is<float>()) {
+    s.heaterTrimHighC = constrain(doc["heaterTrimHighC"].as<float>(), -1.0f, 1.0f);
+  }
+  if (doc["heaterLossScalePct"].is<float>()) {
+    s.heaterLossScalePct = constrain(doc["heaterLossScalePct"].as<float>(), 50.0f, 200.0f);
+  }
+
+  if (doc["heaterT1"].is<float>()) s.heaterT1 = doc["heaterT1"].as<float>();
+  if (doc["heaterTau1"].is<float>()) s.heaterTau1 = constrain(doc["heaterTau1"].as<float>(), 10.0f, 600.0f);
+  if (doc["heaterLossW1"].is<float>()) s.heaterLossW1 = constrain(doc["heaterLossW1"].as<float>(), 0.0f, 1000.0f);
+  if (doc["heaterStoreGain1"].is<float>()) s.heaterStoreGain1 = constrain(doc["heaterStoreGain1"].as<float>(), 0.2f, 3.0f);
+
+  if (doc["heaterT2"].is<float>()) s.heaterT2 = doc["heaterT2"].as<float>();
+  if (doc["heaterTau2"].is<float>()) s.heaterTau2 = constrain(doc["heaterTau2"].as<float>(), 10.0f, 600.0f);
+  if (doc["heaterLossW2"].is<float>()) s.heaterLossW2 = constrain(doc["heaterLossW2"].as<float>(), 0.0f, 1000.0f);
+  if (doc["heaterStoreGain2"].is<float>()) s.heaterStoreGain2 = constrain(doc["heaterStoreGain2"].as<float>(), 0.2f, 3.0f);
   if (doc.containsKey("heaterDeadband")) {
     s.heaterDeadband = doc["heaterDeadband"].as<float>();
   }

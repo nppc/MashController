@@ -39,6 +39,54 @@ float averageWindowSec(const SettingsEE &s) {
 }
 }
 
+float heaterEffectiveTarget(float targetC, const SettingsEE &s) {
+  if (s.heaterT2 > s.heaterT1 + 1.0f) {
+    const float ratio = constrain((targetC - s.heaterT1) / (s.heaterT2 - s.heaterT1), 0.0f, 1.0f);
+    const float trim = s.heaterTrimLowC + (s.heaterTrimHighC - s.heaterTrimLowC) * ratio;
+    return targetC + constrain(trim, -1.0f, 1.0f);
+  }
+  return targetC + constrain(s.heaterTrimLowC, -1.0f, 1.0f);
+}
+
+float heaterCurrentTauSec(float tempC, const SettingsEE &s) {
+  if (s.heaterT2 > s.heaterT1 + 1.0f && s.heaterTau1 > 1.0f && s.heaterTau2 > 1.0f) {
+    const float slope = (s.heaterTau2 - s.heaterTau1) / (s.heaterT2 - s.heaterT1);
+    const float tau = s.heaterTau1 + slope * (tempC - s.heaterT1);
+    return constrain(tau, 15.0f, 300.0f);
+  }
+  return s.heaterTauSec > 1.0f ? s.heaterTauSec : 90.0f;
+}
+
+float heaterCurrentLossW(float tempC, const SettingsEE &s) {
+  const float deltaT = max(tempC - s.heaterAmbientC, 0.0f);
+  if (deltaT <= 0.01f) return 0.0f;
+
+  const float scale = constrain(s.heaterLossScalePct, 50.0f, 200.0f) / 100.0f;
+
+  if (s.heaterT2 > s.heaterT1 + 1.0f && s.heaterLossW1 > 0.1f && s.heaterLossW2 > 0.1f) {
+    const float dt1 = max(s.heaterT1 - s.heaterAmbientC, 1.0f);
+    const float dt2 = max(s.heaterT2 - s.heaterAmbientC, dt1 + 1.0f);
+    const float alpha = constrain(logf(s.heaterLossW2 / s.heaterLossW1) / logf(dt2 / dt1), 1.0f, 2.0f);
+    const float lossW = s.heaterLossW1 * powf(deltaT / dt1, alpha);
+    return max(lossW * scale, 0.0f);
+  }
+
+  // Fallback: single-point linear loss with sqrt(sqrt(dt)) scaling
+  const float refLossWPerC = s.heaterLossWPerC > 0.0f ? s.heaterLossWPerC : 3.0f;
+  const float dtRef = max(65.0f - s.heaterAmbientC, 10.0f);
+  const float lossW = refLossWPerC * deltaT * sqrtf(sqrtf(deltaT / dtRef));
+  return max(lossW * scale, 0.0f);
+}
+
+float heaterCurrentStoreGain(float tempC, const SettingsEE &s) {
+  if (s.heaterT2 > s.heaterT1 + 1.0f && s.heaterStoreGain1 > 0.1f && s.heaterStoreGain2 > 0.1f) {
+    const float ratio = constrain((tempC - s.heaterT1) / (s.heaterT2 - s.heaterT1), 0.0f, 1.0f);
+    const float gain = s.heaterStoreGain1 + (s.heaterStoreGain2 - s.heaterStoreGain1) * ratio;
+    return constrain(gain, 0.5f, 2.0f);
+  }
+  return s.heaterStoreGain > 0.1f ? s.heaterStoreGain : 1.0f;
+}
+
 void heaterResetThermalModel(float /*initialTemperature*/, float waterMassKg) {
   capacityJPerC = max(waterMassKg, 0.1f) * WATER_SPECIFIC_HEAT;
   model.reset();
@@ -76,16 +124,17 @@ void updateHeater() {
     heaterResetThermalModel(readTemperature(), activeProfile.waterMassKg);
   }
 
-  // Advance the stored-heat model with what the SSR actually did since the
-  // last reading (pause can hold the output off while heaterOn is true).
-  model.configure(s.heaterPowerEffW, s.heaterTauSec, s.heaterStoreGain);
+  const float windowSec = averageWindowSec(s);
+  const float averageC = averageTemperature(windowSec);
+  const float lossW = heaterCurrentLossW(averageC, s);
+  const float tauSec = heaterCurrentTauSec(averageC, s);
+  const float storeGain = heaterCurrentStoreGain(averageC, s);
+
+  // Advance the stored-heat model with dynamic parameters and SSR history
+  model.configure(s.heaterPowerEffW, tauSec, storeGain);
   const float dtSec = min(now - previousUpdateAt, 10000UL) / 1000.0f;
   model.update(dtSec, outputWasOn);
   previousUpdateAt = now;
-
-  const float windowSec = averageWindowSec(s);
-  const float averageC = averageTemperature(windowSec);
-  const float lossW = max(s.heaterLossWPerC, 0.0f) * (averageC - s.heaterAmbientC);
 
   // The average lags by half its window; bring it forward with the rate the
   // model says the water is changing at right now.
@@ -94,16 +143,18 @@ void updateHeater() {
   predictedPeak = model.predictPeak(waterNowC, capacityJPerC, lossW);
   lastWaterNowC = waterNowC;
 
+  const float effTarget = heaterEffectiveTarget(targetTemperature, s);
+
   const bool switchLocked =
       hasSwitched &&
       (now - lastSwitchAt < (unsigned long)s.heaterMinSwitchSec * 1000UL);
 
   if (!switchLocked) {
-    if (!heaterOn && predictedPeak < targetTemperature - s.heaterDeadband) {
+    if (!heaterOn && predictedPeak < effTarget - s.heaterDeadband) {
       heaterOn = true;
       lastSwitchAt = now;
       hasSwitched = true;
-    } else if (heaterOn && predictedPeak >= targetTemperature) {
+    } else if (heaterOn && predictedPeak >= effTarget) {
       heaterOn = false;
       lastSwitchAt = now;
       hasSwitched = true;
@@ -144,7 +195,8 @@ float heaterEstimatedSecondsToTarget()
      * Target already reached.
      * Clear the stored ETA so that the next heating cycle starts fresh.
      */
-    if (lastWaterNowC >= targetTemperature) {
+    const float effTarget = heaterEffectiveTarget(targetTemperature, s);
+    if (lastWaterNowC >= effTarget) {
         etaFiltered = NAN;
         etaLastUpdateMs = 0;
         return NAN;
@@ -170,59 +222,34 @@ float heaterEstimatedSecondsToTarget()
     float etaRaw = NAN;
 
     /*
-     * Simulate the heater forward until the target temperature is reached.
+     * Simulate the heater forward until the effective target temperature is reached.
      */
     for (int i = 0; i < maxSteps; ++i) {
-
+        sim.configure(s.heaterPowerEffW, heaterCurrentTauSec(T, s), heaterCurrentStoreGain(T, s));
         sim.update(dt, on);
 
-        float heaterLossWPerC =
-            s.heaterLossWPerC > 0.0f ?
-            s.heaterLossWPerC : 0.0f;
-
-        float lossW =
-            heaterLossWPerC *
-            (T - s.heaterAmbientC);
-
-        float rate =
-            (sim.flowW() - lossW) /
-            capacityJPerC;
-
+        float lossW = heaterCurrentLossW(T, s);
+        float rate = (sim.flowW() - lossW) / capacityJPerC;
         T += rate * dt;
 
-        simSwitchElapsedMs +=
-            (unsigned long)(dt * 1000.0f);
+        simSwitchElapsedMs += (unsigned long)(dt * 1000.0f);
 
         /*
          * One simulation step has already been performed when i == 0.
          */
-        if (T >= targetTemperature) {
+        if (T >= effTarget) {
             etaRaw = (float)(i + 1) * dt;
             break;
         }
 
-        bool locked =
-            simSwitchElapsedMs <
-            (unsigned long)s.heaterMinSwitchSec * 1000UL;
+        bool locked = simSwitchElapsedMs < (unsigned long)s.heaterMinSwitchSec * 1000UL;
 
         if (!locked) {
-
-            float peak =
-                sim.predictPeak(
-                    T,
-                    capacityJPerC,
-                    lossW);
-
-            if (!on &&
-                peak < targetTemperature -
-                       s.heaterDeadband) {
-
+            float peak = sim.predictPeak(T, capacityJPerC, lossW);
+            if (!on && peak < effTarget - s.heaterDeadband) {
                 on = true;
                 simSwitchElapsedMs = 0;
-            }
-            else if (on &&
-                     peak >= targetTemperature) {
-
+            } else if (on && peak >= effTarget) {
                 on = false;
                 simSwitchElapsedMs = 0;
             }

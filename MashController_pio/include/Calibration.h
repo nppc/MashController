@@ -7,6 +7,7 @@ bool calibrationIsActive();
 bool calibrationHeaterIsOn();
 void calibrationUpdate();
 bool calibrationStart(float waterLiters);
+bool calibrationStart(float waterLiters, float ambientC);
 bool calibrationStart(float waterLiters, float targetC, float ambientC);
 void calibrationStop();
 

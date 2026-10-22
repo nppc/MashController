@@ -218,53 +218,9 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">Actual Heating Power <a class="help-link" href="calibration.html">?</a></div>
-			  <div class="setting-desc">
-				Calibrated power that reaches the water, in watts.
-			  </div>
-			</div>
-			<input id="setHeaterPowerEffW" class="input-small" type="number"
-				   step="10" min="1" max="10000">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
-			  <div class="setting-title">Stored Heat Delay <a class="help-link" href="calibration.html">?</a></div>
-			  <div class="setting-desc">
-				Calibrated τ: how fast stored heat reaches the water, in seconds.
-			  </div>
-			</div>
-			<input id="setHeaterTauSec" class="input-small" type="number"
-				   step="1" min="5" max="1200">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
-			  <div class="setting-title">Residual Heat Factor <a class="help-link" href="calibration.html">?</a></div>
-			  <div class="setting-desc">
-				Calibrated overshoot scale, usually a little above 1.
-			  </div>
-			</div>
-			<input id="setHeaterStoreGain" class="input-small" type="number"
-				   step="0.01" min="0.2" max="5">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
-			  <div class="setting-title">Heat Loss Rate <a class="help-link" href="calibration.html">?</a></div>
-			  <div class="setting-desc">
-				Calibrated loss in watts per °C above room temperature.
-			  </div>
-			</div>
-			<input id="setHeaterLossWPerC" class="input-small" type="number"
-				   step="0.1" min="0" max="100">
-		  </div>
-
-		  <div class="setting-row">
-			<div>
 			  <div class="setting-title">Ambient Temperature</div>
 			  <div class="setting-desc">
-				Used with Heat Loss. Update it if the brewing room is much warmer or colder.
+				Used for heat loss calculation. Update it if the brewing room is warmer or colder.
 			  </div>
 			</div>
 			<input id="setHeaterAmbientC" class="input-small" type="number"
@@ -273,17 +229,45 @@
 
 		  <div class="setting-row">
 			<div>
-			  <div class="setting-title">
-				Heater Deadband
-				<button type="button" class="help-link" aria-label="Heater Deadband help"
-						onclick="showHelpModal('Heater Deadband', 'Predictive peak is the estimated highest temperature the mash will reach based on the current stored heat in the element and pot. Deadband is the safety margin below target before the heater restarts. This helps prevent short cycling while the thermal mass is still carrying heat.', 'PredictivePeakDeadband.png')">?</button>
-			  </div>
-			  <div class="setting-desc">
-				When the predicted peak falls below target temperature by this much, the heater turns back on.
+			  <div class="setting-title">Kettle Calibration</div>
+			  <div class="setting-desc" id="calibrationStatusText">
+				Dual-anchor dynamic thermal model.
 			  </div>
 			</div>
-			<input id="setHeaterDeadband" class="input-small" type="number"
-				   step="0.1" min="0" max="10">
+			<a href="calibration.html" class="btn" style="text-decoration:none; text-align:center; padding:6px 14px; font-size:13px; align-self:center; white-space:nowrap;">Calibrate Kettle</a>
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Low Rest Trim (50 °C)</div>
+			  <div class="setting-desc">
+				Fine-tune switch-off at low mash rests (40–55 °C). Negative cuts earlier to prevent overshoot; positive adds heat.
+			  </div>
+			</div>
+			<input id="setHeaterTrimLowC" class="input-small" type="number"
+				   step="0.05" min="-1" max="1">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">High Rest Trim (70 °C)</div>
+			  <div class="setting-desc">
+				Fine-tune switch-off at high mash rests (65–78 °C). Interpolated smoothly across the mash schedule.
+			  </div>
+			</div>
+			<input id="setHeaterTrimHighC" class="input-small" type="number"
+				   step="0.05" min="-1" max="1">
+		  </div>
+
+		  <div class="setting-row">
+			<div>
+			  <div class="setting-title">Insulation / Loss Scale</div>
+			  <div class="setting-desc">
+				Scale calibrated heat loss for kettle insulation (e.g. 80% insulated jacket, 100% bare kettle, 120% open lid or drafty room).
+			  </div>
+			</div>
+			<input id="setHeaterLossScalePct" class="input-small" type="number"
+				   step="5" min="50" max="200">
 		  </div>
 
 		  <div class="setting-row">

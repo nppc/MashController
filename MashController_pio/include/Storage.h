@@ -15,8 +15,8 @@
 #define STORAGE_PASS_LEN     64
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      14            // bump if the struct layout changes
-#define STORAGE_PREVIOUS_VERSION 13        // the ONLY older layout migrated (see Storage.cpp);
+#define STORAGE_VERSION      15            // bump if the struct layout changes
+#define STORAGE_PREVIOUS_VERSION 14        // the ONLY older layout migrated (see Storage.cpp);
                                            // bumping STORAGE_VERSION without updating this
                                            // and the Legacy struct breaks the build on purpose
 
@@ -56,6 +56,22 @@ struct SettingsEE {
   float    heaterAmbientC;       // room temperature used for the heat loss
   float    heaterDeadband;       // predicted peak must fall this far below target to switch on
   uint16_t heaterMinSwitchSec;   // minimum time between heater switches
+
+  // Dual-point calibration learned parameters (internal)
+  float    heaterT1;             // Cal point 1 temp (e.g. 50.0 C)
+  float    heaterTau1;           // tau at T1 (s)
+  float    heaterLossW1;         // loss at T1 (W)
+  float    heaterStoreGain1;     // store gain at T1
+  float    heaterT2;             // Cal point 2 temp (e.g. 70.0 C)
+  float    heaterTau2;           // tau at T2 (s)
+  float    heaterLossW2;         // loss at T2 (W)
+  float    heaterStoreGain2;     // store gain at T2
+
+  // User fine-tune knobs
+  float    heaterTrimLowC;       // Low rest trim at 50 C (e.g. -0.5 to +0.5 C, default 0.0 C)
+  float    heaterTrimHighC;      // High rest trim at 70 C (e.g. -0.5 to +0.5 C, default 0.0 C)
+  float    heaterLossScalePct;   // Insulation / loss scale % (70 to 130 %, default 100 %)
+
   uint8_t  mixerRestSec;         // length of the rest period
   uint8_t  mixerOnSec;           // seconds of mixerDurationSec the motor runs
   uint16_t coolDownSec;          // seconds mixer runs after profile completes

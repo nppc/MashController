@@ -3,8 +3,7 @@ let lastCalibrationStatus = null;
 let lastAnalysedCount = -1;
 let lastAnalysis = null;
 // The Room temperature field starts blank; fill it once from the device's
-// current ambientC (the settings value, or the last run's, whichever the
-// device is reporting) the first time we hear from it, then leave it alone.
+// current ambientC the first time we hear from it, then leave it alone.
 let ambientDefaultSet = false;
 let calibrationLog = { runId: null, t: [], T: [] };
 
@@ -14,16 +13,18 @@ const WATER_J_PER_L_C = 4186;
 const HEATING_WINDOW_SEC = 480;
 const TAU_MIN_SEC = 5;
 const TAU_MAX_SEC = 1200;
-const PULSE_TIMES_SEC = [5, 10, 20, 30, 60, 120, 300];
 
 const PHASE_TEXT = {
   0: 'Ready',
-  2: 'Coasting: waiting for the peak',
-  3: 'Complete',
-  4: 'Heating timeout',
-  5: 'Stopped: temperature sensor failure',
-  6: 'Stopped',
-  7: 'Stopped: log full'
+  1: 'Step 1: Heating to 50 °C',
+  2: 'Step 1: Coasting (detecting peak at 50 °C)',
+  3: 'Step 2: Heating to 70 °C',
+  4: 'Step 2: Coasting (detecting peak at 70 °C)',
+  5: 'Complete',
+  6: 'Heating timeout',
+  7: 'Stopped: temperature sensor failure',
+  8: 'Stopped',
+  9: 'Stopped: log full'
 };
 
 function calibrationFormatTime(seconds) {
@@ -91,9 +92,8 @@ function solve3(m, v) {
 //   A   temperature at switch-off
 //   B   rise still to come from stored energy (stored J / water capacity)
 //   r   cooling rate from heat loss (°C/s)
-// For each tau the other three are linear, so tau is searched and A, B, r solved.
 function fitCoast(points) {
-  if (points.length < 12) return null;
+  if (points.length < 8) return null;
   let best = null;
   const profile = [];
 
@@ -121,7 +121,7 @@ function fitCoast(points) {
   }
   if (!best) return null;
 
-  // Approximate 95 % range of tau: where the error is not significantly worse.
+  // Approximate 95 % range of tau: where error is not significantly worse.
   const n = points.length;
   const limit = best.sse * (1 + 4 / Math.max(1, n - 4));
   const inRange = profile.filter(p => p.sse <= limit).map(p => p.tau);
@@ -133,7 +133,7 @@ function fitCoast(points) {
   return best;
 }
 
-// Rise after switch-off for a given stored energy; same formula as HeaterModel::predictPeak.
+// Rise after switch-off for a given stored energy; matches HeaterModel::predictPeak.
 function predictedRise(storedJ, capacity, lossW, tau) {
   const rise = storedJ / capacity;
   if (!(lossW > 0)) return { rise, tPeak: 5 * tau };
@@ -144,113 +144,223 @@ function predictedRise(storedJ, capacity, lossW, tau) {
   return { rise: rise * (1 - lossRate / initialRate) - lossRate * tPeak, tPeak };
 }
 
-// heatEndSec is null until the heater switches off. Number(null) is 0, which
-// would look like "switched off at t=0", so map null/missing to NaN.
-function calibrationHeatEnd(status) {
-  const v = status.heatEndSec;
-  return v === null || v === undefined ? NaN : Number(v);
-}
-
 function analyseCalibration(status) {
   const samples = calibrationSamples(status);
-  const off = calibrationHeatEnd(status);
-  if (!Number.isFinite(off)) return null;
+  const off1 = Number(status.heatEnd1Sec);
+  if (!Number.isFinite(off1)) return null;
 
   const capacity = Number(status.waterLiters) * WATER_J_PER_L_C;
   const ambient = Number(status.ambientC);
-  const target = Number(status.targetC);
   const rated = Number(status.heaterPowerW);
+  const t1 = Number(status.target1C || 50.0);
+  const t2 = Number(status.target2C || 70.0);
+  const step2Start = Number(status.step2StartSec);
+  const off2 = Number(status.heatEnd2Sec);
 
-  const coast = samples.filter(p => p.t >= off).map(p => ({ x: p.t - off, T: p.T }));
-  const fit = fitCoast(coast);
-  if (!fit) return null;
-  const tau = fit.tau;
   const warnings = [];
   const errors = [];
 
-  // Heat loss, scaled to W per °C above room temperature.
-  const coastMean = average(coast.map(p => p.T));
-  const lossW = fit.r * capacity;
-  const lossWPerC = coastMean - ambient > 5 ? lossW / (coastMean - ambient) : NaN;
-  if (!Number.isFinite(lossWPerC)) errors.push('Water was not clearly above room temperature; heat loss cannot be scaled.');
-  if (!(fit.r > 0)) errors.push('The water did not cool after the peak. Check the sensor position and the mixer.');
+  // Coast 1 slice: samples between off1 and step2Start (or current end if step 2 not started)
+  const coast1 = samples
+    .filter(p => p.t >= off1 && (!Number.isFinite(step2Start) || p.t < step2Start))
+    .map(p => ({ x: p.t - off1, T: p.T }));
 
-  // Effective power from the straight part of the heating curve.
-  const heatWindow = samples.filter(p => p.t < off && p.t >= off - HEATING_WINDOW_SEC);
-  const reg = heatWindow.length >= 8 ? linearRegression(heatWindow) : null;
-  let powerEff = NaN;
-  if (reg) {
-    const levelled = 1 - Math.exp(-reg.meanT / tau);
-    const heatingLoss = Number.isFinite(lossWPerC) ? lossWPerC * (reg.meanTemp - ambient) : lossW;
-    powerEff = (capacity * reg.slope + heatingLoss) / levelled;
-    if (levelled < 0.9) warnings.push('Heating was short compared with the time constant; power estimate is less certain.');
+  const fit1 = fitCoast(coast1);
+  if (!fit1) return null;
+
+  const tau1 = fit1.tau;
+  const lossW1 = fit1.r * capacity;
+  const coast1Mean = average(coast1.map(p => p.T));
+
+  // Effective power from Step 1 heating
+  const heat1Window = samples.filter(p => p.t < off1 && p.t >= off1 - HEATING_WINDOW_SEC);
+  const reg1 = heat1Window.length >= 8 ? linearRegression(heat1Window) : null;
+  let powerEff1 = NaN;
+  if (reg1) {
+    const levelled1 = 1 - Math.exp(-reg1.meanT / tau1);
+    powerEff1 = (capacity * reg1.slope + Math.max(0, lossW1)) / Math.max(0.1, levelled1);
+    if (levelled1 < 0.9) warnings.push('Step 1 heating was short compared with time constant; power estimate has higher uncertainty.');
   } else {
-    errors.push('Not enough heating data before switch-off.');
+    warnings.push('Not enough heating data before Step 1 switch-off.');
   }
 
-  // Overshoot size compared with effective power x tau. Above 1 when sensor lag
-  // and mixing add to the heat stored in the element; the controller scales by it.
-  const powerFromCoast = fit.B * capacity / (tau * (1 - Math.exp(-off / tau)));
-  const storeGain = powerFromCoast / powerEff;
+  // Overshoot ratio 1
+  const powerFromCoast1 = fit1.B * capacity / (tau1 * (1 - Math.exp(-off1 / tau1)));
+  const storeGain1 = (powerEff1 > 0) ? powerFromCoast1 / powerEff1 : 1.0;
 
-  if (tau <= TAU_MIN_SEC || tau >= TAU_MAX_SEC || tau > fit.coastSec / 2) {
-    errors.push('Time constant is outside the measurable range.');
-  } else if ((fit.tauHi - fit.tauLo) / tau > 0.5) {
-    warnings.push(`Time constant is poorly defined (${fit.tauLo}-${fit.tauHi} s).`);
+  const step1 = {
+    target: t1,
+    off: off1,
+    fit: fit1,
+    tau: tau1,
+    lossW: lossW1,
+    coastMean: coast1Mean,
+    storeGain: storeGain1,
+    peakTemp: Number(status.peakTemp1),
+    peakCoastSec: Number(status.peakCoast1Sec),
+    measuredRise: Number(status.peakTemp1) - fit1.A
+  };
+
+  // Check Step 2
+  let fit2 = null;
+  let step2 = null;
+  let powerEff = powerEff1;
+
+  if (Number.isFinite(off2)) {
+    const coast2 = samples
+      .filter(p => p.t >= off2)
+      .map(p => ({ x: p.t - off2, T: p.T }));
+
+    fit2 = fitCoast(coast2);
+    if (fit2) {
+      const tau2 = fit2.tau;
+      const lossW2 = fit2.r * capacity;
+      const coast2Mean = average(coast2.map(p => p.T));
+      const step2HeatDuration = off2 - step2Start;
+
+      // Heating rate in Step 2
+      const heat2Window = samples.filter(p => p.t >= step2Start && p.t < off2);
+      const reg2 = heat2Window.length >= 8 ? linearRegression(heat2Window) : null;
+      let powerEff2 = NaN;
+      if (reg2) {
+        powerEff2 = capacity * reg2.slope + Math.max(0, (lossW1 + lossW2) / 2);
+      }
+      if (Number.isFinite(powerEff2) && powerEff2 > 0 && Number.isFinite(powerEff1) && powerEff1 > 0) {
+        powerEff = (powerEff1 + powerEff2) / 2;
+      } else if (Number.isFinite(powerEff2) && powerEff2 > 0) {
+        powerEff = powerEff2;
+      }
+
+      const charge2 = 1 - Math.exp(-step2HeatDuration / tau2);
+      const powerFromCoast2 = fit2.B * capacity / (tau2 * Math.max(0.1, charge2));
+      const storeGain2 = (powerEff > 0) ? powerFromCoast2 / powerEff : 1.0;
+
+      step2 = {
+        target: t2,
+        off: off2,
+        duration: step2HeatDuration,
+        fit: fit2,
+        tau: tau2,
+        lossW: lossW2,
+        coastMean: coast2Mean,
+        storeGain: storeGain2,
+        peakTemp: Number(status.peakTemp2),
+        peakCoastSec: Number(status.peakCoast2Sec),
+        measuredRise: Number(status.peakTemp2) - fit2.A
+      };
+    }
   }
-  if (off < 5 * tau) warnings.push('Heating lasted less than 5 time constants. Start with colder water.');
-  if (fit.rms > 0.15) warnings.push(`Curve fits the readings loosely (RMS ${fit.rms.toFixed(2)} °C).`);
-  if (!(storeGain > 0)) {
-    errors.push('No overshoot was measured after switch-off.');
-  } else if (storeGain < 0.8 || storeGain > 3.5) {
-    warnings.push(`Overshoot is ${storeGain.toFixed(2)}x what the heating rate predicts. ` +
-      'Check the sensor position and mixer; a second, slower heat store may be present.');
+
+  // Calculate power-law heat loss exponent alpha if both steps are available
+  let alpha = 1.35;
+  if (step1 && step2 && step1.lossW > 1.0 && step2.lossW > 1.0) {
+    const dt1 = Math.max(step1.target - ambient, 5.0);
+    const dt2 = Math.max(step2.target - ambient, dt1 + 5.0);
+    if (step2.lossW > step1.lossW) {
+      alpha = Math.log(step2.lossW / step1.lossW) / Math.log(dt2 / dt1);
+      alpha = Math.max(1.0, Math.min(2.0, alpha));
+    }
+  }
+
+  // Model validation checks
+  if (tau1 <= TAU_MIN_SEC || tau1 >= TAU_MAX_SEC) {
+    errors.push('Anchor 1 time constant is outside measurable range.');
+  }
+  if (step2 && (step2.tau <= TAU_MIN_SEC || step2.tau >= TAU_MAX_SEC)) {
+    errors.push('Anchor 2 time constant is outside measurable range.');
+  }
+  if (!(fit1.r > 0)) {
+    errors.push('Water did not cool after the first peak. Check sensor position and mixer.');
+  }
+  if (fit2 && !(fit2.r > 0)) {
+    errors.push('Water did not cool after the second peak. Check sensor position and mixer.');
   }
   if (rated > 0 && Number.isFinite(powerEff)) {
-    if (powerEff > rated * 1.05) warnings.push('Effective power is above the rated power. Check the water volume and the Heater Power setting.');
-    if (powerEff < rated * 0.6) warnings.push('Effective power is below 60 % of rated power. Check the element, voltage and lid.');
-  }
-  const coastEnd = coast[coast.length - 1].x;
-  const peakCoast = Number(status.peakCoastSec);
-  if (Number.isFinite(peakCoast) && coastEnd - peakCoast < Number(status.peakSettleSec || 300) - 30) {
-    warnings.push('The coast ended before the peak had clearly passed.');
+    if (powerEff > rated * 1.05) warnings.push('Effective power is higher than rated power. Verify water volume and Heater Power setting.');
+    if (powerEff < rated * 0.6) warnings.push('Effective power is below 60% of rated power. Check heating element, line voltage, and kettle lid.');
   }
 
-  const lossAtTarget = Number.isFinite(lossWPerC) ? lossWPerC * (target - ambient) : lossW;
-  const fullHeat = predictedRise(storeGain * powerEff * tau, capacity, lossAtTarget, tau);
-  const pulses = PULSE_TIMES_SEC.map(seconds => {
-    const stored = storeGain * powerEff * tau * (1 - Math.exp(-seconds / tau));
+  // Predictions across standard brewing rests
+  const rests = [
+    { name: 'Acid / Glucanase', temp: 45 },
+    { name: 'Low Rest (Anchor 1)', temp: 50 },
+    { name: 'Protein Rest', temp: 55 },
+    { name: 'Beta-Amylase', temp: 65 },
+    { name: 'High Rest (Anchor 2)', temp: 70 },
+    { name: 'Alpha-Amylase', temp: 72 },
+    { name: 'Mash-Out', temp: 78 }
+  ].map(r => {
+    const T = r.temp;
+    let tau = tau1;
+    let gain = storeGain1;
+    let loss = lossW1;
+
+    if (step2) {
+      const frac = (T - t1) / (t2 - t1);
+      tau = Math.round(tau1 + (step2.tau - tau1) * frac);
+      gain = storeGain1 + (step2.storeGain - storeGain1) * frac;
+      const dt = Math.max(T - ambient, 1.0);
+      const dt1 = Math.max(t1 - ambient, 1.0);
+      loss = step1.lossW * Math.pow(dt / dt1, alpha);
+    } else {
+      const dt = Math.max(T - ambient, 1.0);
+      const dt1 = Math.max(t1 - ambient, 1.0);
+      loss = step1.lossW * (dt / dt1);
+    }
+
+    const fullHeat = predictedRise(gain * powerEff * tau, capacity, loss, tau);
+    const pulse30 = predictedRise(gain * powerEff * tau * (1 - Math.exp(-30 / tau)), capacity, loss, tau);
+
     return {
-      seconds,
-      total: powerEff * seconds / capacity,
-      after: predictedRise(stored, capacity, lossAtTarget, tau)
+      name: r.name,
+      temp: T,
+      tau,
+      lossW: loss,
+      gain,
+      fullRise: fullHeat.rise,
+      tPeak: fullHeat.tPeak,
+      pulse30Rise: pulse30.rise
     };
   });
 
   return {
-    fit, tau, off, capacity, ambient, target, rated, powerEff, powerFromCoast, storeGain,
-    lossW, lossWPerC, lossAtTarget, reg, fullHeat, pulses, warnings, errors,
-    measuredRise: Number(status.peakTemp) - fit.A,
-    peakCoast,
-    usable: errors.length === 0 && powerEff > 0 && storeGain > 0
+    capacity,
+    ambient,
+    rated,
+    powerEff,
+    step1,
+    step2,
+    hasDual: !!step2,
+    alpha,
+    rests,
+    warnings,
+    errors,
+    usable: errors.length === 0 && powerEff > 0 && (!step2 || step2.storeGain > 0)
   };
 }
 
 function calibrationChartSvg(samples, status, analysis, tMin, tMax, label) {
   const W = 600, H = 220, L = 44, R = 10, T = 10, B = 26;
-  const target = Number(status.targetC);
-  const off = calibrationHeatEnd(status);
+  const t1 = Number(status.target1C || 50.0);
+  const t2 = Number(status.target2C || 70.0);
+  const off1 = Number(status.heatEnd1Sec);
+  const off2 = Number(status.heatEnd2Sec);
   const shown = samples.filter(p => p.t >= tMin && p.t <= tMax);
+  if (!shown.length) return '';
   let yMin = Math.min(...shown.map(p => p.T));
   let yMax = Math.max(...shown.map(p => p.T));
-  if (Number.isFinite(target)) {
-    yMin = Math.min(yMin, target);
-    yMax = Math.max(yMax, target);
+  if (Number.isFinite(t1) && t1 >= yMin - 5 && t1 <= yMax + 5) {
+    yMin = Math.min(yMin, t1);
+    yMax = Math.max(yMax, t1);
+  }
+  if (Number.isFinite(t2) && t2 >= yMin - 5 && t2 <= yMax + 5) {
+    yMin = Math.min(yMin, t2);
+    yMax = Math.max(yMax, t2);
   }
   const span = Math.max(yMax - yMin, 0.5);
   yMin -= span * 0.05;
   yMax += span * 0.05;
-  const x = t => L + (W - L - R) * (t - tMin) / (tMax - tMin);
+  const x = t => L + (W - L - R) * (t - tMin) / Math.max(tMax - tMin, 1);
   const y = v => T + (H - T - B) * (1 - (v - yMin) / (yMax - yMin));
   const path = pts => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.T).toFixed(1)}`).join('');
 
@@ -262,22 +372,48 @@ function calibrationChartSvg(samples, status, analysis, tMin, tMax, label) {
   svg += `<text x='${L}' y='${H - 8}'>${calibrationFormatTime(tMin)}</text>`;
   svg += `<text x='${(L + W - R) / 2}' y='${H - 8}' text-anchor='middle'>${label}</text>`;
   svg += `<text x='${W - R}' y='${H - 8}' text-anchor='end'>${calibrationFormatTime(tMax)}</text>`;
-  if (Number.isFinite(target)) {
-    svg += `<line class='target' x1='${L}' y1='${y(target)}' x2='${W - R}' y2='${y(target)}'/>`;
+
+  if (Number.isFinite(t1) && t1 >= yMin && t1 <= yMax) {
+    svg += `<line class='target' x1='${L}' y1='${y(t1)}' x2='${W - R}' y2='${y(t1)}'/>`;
+    svg += `<text x='${W - R - 4}' y='${y(t1) - 4}' text-anchor='end'>50°C</text>`;
   }
-  if (Number.isFinite(off) && off >= tMin && off <= tMax) {
-    svg += `<line class='off' x1='${x(off)}' y1='${T}' x2='${x(off)}' y2='${H - B}'/>`;
-    svg += `<text x='${x(off) + 4}' y='${T + 12}'>heater off</text>`;
+  if (Number.isFinite(t2) && t2 >= yMin && t2 <= yMax) {
+    svg += `<line class='target' x1='${L}' y1='${y(t2)}' x2='${W - R}' y2='${y(t2)}'/>`;
+    svg += `<text x='${W - R - 4}' y='${y(t2) - 4}' text-anchor='end'>70°C</text>`;
   }
+
+  if (Number.isFinite(off1) && off1 >= tMin && off1 <= tMax) {
+    svg += `<line class='off' x1='${x(off1)}' y1='${T}' x2='${x(off1)}' y2='${H - B}'/>`;
+    svg += `<text x='${x(off1) + 4}' y='${T + 12}'>off 1 (50°C)</text>`;
+  }
+  if (Number.isFinite(off2) && off2 >= tMin && off2 <= tMax) {
+    svg += `<line class='off' x1='${x(off2)}' y1='${T}' x2='${x(off2)}' y2='${H - B}'/>`;
+    svg += `<text x='${x(off2) + 4}' y='${T + 12}'>off 2 (70°C)</text>`;
+  }
+
   svg += `<path class='data' d='${path(shown)}'/>`;
+
   if (analysis) {
-    const f = analysis.fit;
-    const fitted = [];
-    for (let i = 0; i <= 80; i++) {
-      const xs = f.coastSec * i / 80;
-      fitted.push({ t: off + xs, T: f.A + f.B * (1 - Math.exp(-xs / f.tau)) - f.r * xs });
+    if (analysis.step1?.fit && Number.isFinite(off1)) {
+      const f1 = analysis.step1.fit;
+      const fitted1 = [];
+      for (let i = 0; i <= 60; i++) {
+        const xs = f1.coastSec * i / 60;
+        const pt = { t: off1 + xs, T: f1.A + f1.B * (1 - Math.exp(-xs / f1.tau)) - f1.r * xs };
+        if (pt.t >= tMin && pt.t <= tMax) fitted1.push(pt);
+      }
+      if (fitted1.length > 1) svg += `<path class='fit' d='${path(fitted1)}'/>`;
     }
-    svg += `<path class='fit' d='${path(fitted)}'/>`;
+    if (analysis.step2?.fit && Number.isFinite(off2)) {
+      const f2 = analysis.step2.fit;
+      const fitted2 = [];
+      for (let i = 0; i <= 60; i++) {
+        const xs = f2.coastSec * i / 60;
+        const pt = { t: off2 + xs, T: f2.A + f2.B * (1 - Math.exp(-xs / f2.tau)) - f2.r * xs };
+        if (pt.t >= tMin && pt.t <= tMax) fitted2.push(pt);
+      }
+      if (fitted2.length > 1) svg += `<path class='fit' d='${path(fitted2)}'/>`;
+    }
   }
   return svg + '</svg>';
 }
@@ -289,56 +425,105 @@ function renderCalibrationChart(samples, status, analysis) {
     return;
   }
   const tEnd = Math.max(samples[samples.length - 1].t, 60);
-  let html = calibrationChartSvg(samples, status, analysis, 0, tEnd, 'Whole run');
-  const off = calibrationHeatEnd(status);
-  if (Number.isFinite(off) && tEnd - off >= 60) {
-    // Zoom on switch-off: the overshoot is too small to see on the full chart.
-    html += calibrationChartSvg(samples, status, analysis, Math.max(0, off - 300), tEnd, 'Switch-off and coast');
+  let html = calibrationChartSvg(samples, status, analysis, 0, tEnd, 'Complete Run');
+
+  const off1 = Number(status.heatEnd1Sec);
+  const step2Start = Number(status.step2StartSec);
+  if (Number.isFinite(off1)) {
+    const endCoast1 = Number.isFinite(step2Start) ? step2Start : tEnd;
+    if (endCoast1 - off1 >= 30) {
+      html += calibrationChartSvg(samples, status, analysis, Math.max(0, off1 - 180), endCoast1 + 20, 'Step 1: 50 °C Peak & Coast');
+    }
   }
+
+  const off2 = Number(status.heatEnd2Sec);
+  if (Number.isFinite(off2) && tEnd - off2 >= 30) {
+    html += calibrationChartSvg(samples, status, analysis, Math.max(0, off2 - 180), tEnd, 'Step 2: 70 °C Peak & Coast');
+  }
+
   chart.innerHTML = html;
 }
 
 function renderCalibrationTable(samples, status) {
-  const off = calibrationHeatEnd(status);
+  const off1 = Number(status.heatEnd1Sec);
+  const step2Start = Number(status.step2StartSec);
+  const off2 = Number(status.heatEnd2Sec);
+
   document.getElementById('calibrationSampleCount').textContent = samples.length;
   document.getElementById('calibrationSamples').innerHTML = samples.length
     ? samples.map(p => {
-        const phase = Number.isFinite(off) && p.t >= off ? 'Coasting' : 'Heating';
+        let phase = 'Heat to 50°C';
+        if (Number.isFinite(off2) && p.t >= off2) phase = 'Coast at 70°C';
+        else if (Number.isFinite(step2Start) && p.t >= step2Start) phase = 'Heat to 70°C';
+        else if (Number.isFinite(off1) && p.t >= off1) phase = 'Coast at 50°C';
         return `<tr><td>${calibrationFormatTime(p.t)}</td><td>${phase}</td><td>${p.T.toFixed(2)} °C</td></tr>`;
       }).join('')
     : '<tr><td colspan="3">No readings yet</td></tr>';
 }
 
 function renderLiveMetrics(status, samples, analysis) {
-  const off = calibrationHeatEnd(status);
-  const now = samples.length ? samples[samples.length - 1].t : 0;
-  const recent = samples.filter(p => p.t >= now - 300 && (!Number.isFinite(off) || p.t < off));
-  const reg = recent.length >= 5 ? linearRegression(recent) : null;
-  const rate = reg ? reg.slope * 60 : NaN;
-  const target = Number(status.targetC);
+  const phase = Number(status.phase);
   const current = Number(status.currentTemp);
+  const now = samples.length ? samples[samples.length - 1].t : 0;
+  const off1 = Number(status.heatEnd1Sec);
+  const step2Start = Number(status.step2StartSec);
+  const off2 = Number(status.heatEnd2Sec);
 
-  let items;
-  if (!Number.isFinite(off)) {
-    const remaining = rate > 0 ? (target - current) / rate * 60 : NaN;
+  let items = [];
+
+  if (phase === 1) { // Heating to 50 °C
+    const recent = samples.filter(p => p.t >= now - 300);
+    const reg = recent.length >= 5 ? linearRegression(recent) : null;
+    const rate = reg ? reg.slope * 60 : NaN;
+    const remaining = rate > 0 ? (50.0 - current) / rate * 60 : NaN;
     items = [
-      ['Heating rate', formatNumber(rate, 2, ' °C/min')],
-      ['Time to target', calibrationFormatTime(remaining)],
-      ['Water power', formatNumber(reg ? reg.slope * status.waterLiters * WATER_J_PER_L_C : NaN, 0, ' W')],
-      ['Target', formatNumber(target, 1, ' °C')]
+      ['Target', '50.0 °C (Step 1)'],
+      ['Heating Rate', formatNumber(rate, 2, ' °C/min')],
+      ['Time to 50 °C', calibrationFormatTime(remaining)],
+      ['Water Power', formatNumber(reg ? reg.slope * status.waterLiters * WATER_J_PER_L_C : NaN, 0, ' W')]
     ];
-  } else {
-      const peakKnown = Number.isFinite(status.peakTemp) && Number.isFinite(status.peakCoastSec);
-      const peak = Number(status.peakTemp);
-      const peakCoast = Number(status.peakCoastSec);
-      const coastNow = Number(status.elapsedSec) - off;
-      items = [
-        ['Peak so far', peakKnown ? formatNumber(peak, 2, ' °C') : 'Waiting for peak'],
-        ['Rise since off', peakKnown ? formatNumber(peak - target, 2, ' °C') : '--'],
-        ['Since peak', peakKnown ? calibrationFormatTime(coastNow - peakCoast) : '--'],
-        ['Preliminary τ', analysis ? `${analysis.tau} s` : '--']
-      ];
+  } else if (phase === 2) { // Coasting at 50 °C
+    const peak = Number(status.peakTemp1);
+    const peakKnown = Number.isFinite(peak);
+    const coastNow = now - off1;
+    const peakCoast = Number(status.peakCoast1Sec);
+    items = [
+      ['50 °C Peak so far', peakKnown ? formatNumber(peak, 2, ' °C') : 'Waiting for peak'],
+      ['Rise since off', peakKnown ? formatNumber(peak - 50.0, 2, ' °C') : '--'],
+      ['Since peak', (peakKnown && Number.isFinite(peakCoast)) ? calibrationFormatTime(coastNow - peakCoast) : '--'],
+      ['Preliminary τ₁', analysis?.step1 ? `${analysis.step1.tau} s` : '--']
+    ];
+  } else if (phase === 3) { // Heating to 70 °C
+    const recent = samples.filter(p => p.t >= now - 300 && p.t >= step2Start);
+    const reg = recent.length >= 5 ? linearRegression(recent) : null;
+    const rate = reg ? reg.slope * 60 : NaN;
+    const remaining = rate > 0 ? (70.0 - current) / rate * 60 : NaN;
+    items = [
+      ['Target', '70.0 °C (Step 2)'],
+      ['Heating Rate', formatNumber(rate, 2, ' °C/min')],
+      ['Time to 70 °C', calibrationFormatTime(remaining)],
+      ['Water Power', formatNumber(reg ? reg.slope * status.waterLiters * WATER_J_PER_L_C : NaN, 0, ' W')]
+    ];
+  } else if (phase === 4) { // Coasting at 70 °C
+    const peak = Number(status.peakTemp2);
+    const peakKnown = Number.isFinite(peak);
+    const coastNow = now - off2;
+    const peakCoast = Number(status.peakCoast2Sec);
+    items = [
+      ['70 °C Peak so far', peakKnown ? formatNumber(peak, 2, ' °C') : 'Waiting for peak'],
+      ['Rise since off', peakKnown ? formatNumber(peak - 70.0, 2, ' °C') : '--'],
+      ['Since peak', (peakKnown && Number.isFinite(peakCoast)) ? calibrationFormatTime(coastNow - peakCoast) : '--'],
+      ['Preliminary τ₂', analysis?.step2 ? `${analysis.step2.tau} s` : '--']
+    ];
+  } else if (phase === 5) { // Complete
+    items = [
+      ['Status', 'Calibration Complete'],
+      ['Effective Power', formatNumber(analysis?.powerEff, 0, ' W')],
+      ['τ (50 °C / 70 °C)', analysis ? `${analysis.step1?.tau ?? '--'}s / ${analysis.step2?.tau ?? '--'}s` : '--'],
+      ['Loss (50 °C / 70 °C)', analysis ? `${formatNumber(analysis.step1?.lossW, 0)}W / ${formatNumber(analysis.step2?.lossW, 0)}W` : '--']
+    ];
   }
+
   document.getElementById('calibrationLiveMetrics').innerHTML = items
     .map(([label, value]) => `<div class="live-metric"><span>${label}</span><strong>${value}</strong></div>`)
     .join('');
@@ -352,38 +537,100 @@ function renderCalibrationResult(analysis) {
     return;
   }
   const a = analysis;
+  const s1 = a.step1;
+  const s2 = a.step2;
+
   const notes = [
     ...a.errors.map(text => `<li class="calibration-error">${text}</li>`),
     ...a.warnings.map(text => `<li>${text}</li>`)
   ].join('');
-  const pulseRows = a.pulses.map(p =>
-    `<tr><td>${p.seconds} s</td><td>${p.total.toFixed(2)} °C</td><td>${p.after.rise.toFixed(2)} °C</td></tr>`).join('');
+
+  let tableRows = '';
+  if (a.rests) {
+    tableRows = a.rests.map(r => `
+      <tr>
+        <td><strong>${r.name}</strong> (${r.temp}°C)</td>
+        <td>${r.tau} s</td>
+        <td>${r.lossW.toFixed(0)} W</td>
+        <td>+${r.fullRise.toFixed(2)} °C</td>
+        <td>+${r.pulse30Rise.toFixed(2)} °C</td>
+      </tr>
+    `).join('');
+  }
 
   result.innerHTML = `
-    <div class="result-heading">Calculated from logged values</div>
+    <div class="result-heading">Dual-Anchor Calibration Results</div>
+
     <div class="result-values">
-      Time constant τ: <strong>${a.tau} s</strong> <small>(range ${a.fit.tauLo}-${a.fit.tauHi} s)</small><br>
-      Effective power: <strong>${formatNumber(a.powerEff, 0, ' W')}</strong>
-        <small>${a.rated > 0 ? `(${(a.powerEff / a.rated * 100).toFixed(0)} % of rated ${a.rated.toFixed(0)} W)` : ''}</small><br>
-      Store gain: <strong>${formatNumber(a.storeGain, 2)}</strong><br>
-      Heat loss: <strong>${formatNumber(a.lossWPerC, 2, ' W/°C')}</strong>
-        <small>(${formatNumber(a.lossAtTarget, 0, ' W')} at ${a.target.toFixed(0)} °C in a ${a.ambient.toFixed(0)} °C room)</small>
+      Effective Heating Power: <strong>${formatNumber(a.powerEff, 0, ' W')}</strong>
+      <small>${a.rated > 0 ? `(${(a.powerEff / a.rated * 100).toFixed(0)} % of rated ${a.rated.toFixed(0)} W)` : ''}</small><br>
+      Heat Loss Non-Linearity (α): <strong>${a.alpha.toFixed(2)}</strong>
+      <small>(loss scales as ΔT<sup>${a.alpha.toFixed(2)}</sup>)</small>
     </div>
-    <div class="result-grid">
-      <div><span>Heated for</span><strong>${calibrationFormatTime(a.off)}</strong></div>
-      <div><span>Measured rise after off</span><strong>${formatNumber(a.measuredRise, 2, ' °C')}</strong></div>
-      <div><span>Model rise after off</span><strong>${formatNumber(a.fullHeat.rise, 2, ' °C')}</strong></div>
-      <div><span>Time to peak</span><strong>${calibrationFormatTime(a.peakCoast)}</strong></div>
-      <div><span>Fit RMS</span><strong>${a.fit.rms.toFixed(3)} °C</strong></div>
+
+    <div style="margin: 12px 0; overflow-x: auto;">
+      <table class="calibration-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Anchor 1 (50 °C)</th>
+            <th>Anchor 2 (70 °C)</th>
+            <th>Dynamic Shift</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Time Constant (τ)</td>
+            <td><strong>${s1 ? s1.tau : '--'} s</strong></td>
+            <td><strong>${s2 ? s2.tau : '--'} s</strong></td>
+            <td>${s1 && s2 ? `${(s2.tau - s1.tau > 0 ? '+' : '')}${s2.tau - s1.tau} s (${((s2.tau - s1.tau)/s1.tau*100).toFixed(0)}%)` : '--'}</td>
+          </tr>
+          <tr>
+            <td>Heat Loss Rate</td>
+            <td><strong>${s1 ? formatNumber(s1.lossW, 1, ' W') : '--'}</strong></td>
+            <td><strong>${s2 ? formatNumber(s2.lossW, 1, ' W') : '--'}</strong></td>
+            <td>${s1 && s2 ? `+${(s2.lossW - s1.lossW).toFixed(1)} W` : '--'}</td>
+          </tr>
+          <tr>
+            <td>Store Gain Factor</td>
+            <td><strong>${s1 ? s1.storeGain.toFixed(2) : '--'}</strong></td>
+            <td><strong>${s2 ? s2.storeGain.toFixed(2) : '--'}</strong></td>
+            <td>${s1 && s2 ? `${(s2.storeGain - s1.storeGain > 0 ? '+' : '')}${(s2.storeGain - s1.storeGain).toFixed(2)}` : '--'}</td>
+          </tr>
+          <tr>
+            <td>Measured Overshoot</td>
+            <td><strong>${s1 ? formatNumber(s1.measuredRise, 2, ' °C') : '--'}</strong></td>
+            <td><strong>${s2 ? formatNumber(s2.measuredRise, 2, ' °C') : '--'}</strong></td>
+            <td>Peak after heater off</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <table class="calibration-table">
-      <thead><tr><th>Heater pulse</th><th>Total gain</th><th>Rise after off</th></tr></thead>
-      <tbody>${pulseRows}</tbody>
-    </table>
-    <small>Predicted at ${a.target.toFixed(0)} °C with ${(a.capacity / WATER_J_PER_L_C).toFixed(1)} L.
-      "Rise after off" is how far the temperature keeps climbing after the heater switches off.</small>
+
+    <div class="result-heading" style="margin-top:16px;">Predicted Behaviour Across Mash Schedule</div>
+    <div style="overflow-x: auto;">
+      <table class="calibration-table">
+        <thead>
+          <tr>
+            <th>Rest</th>
+            <th>Dynamic τ</th>
+            <th>Heat Loss</th>
+            <th>Full Ramp Overshoot</th>
+            <th>30s Pulse Rise</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+    </div>
+    <small style="display:block; margin-top:6px; color:var(--text-dim);">
+      Predicted with ${(a.capacity / WATER_J_PER_L_C).toFixed(1)} L water at ${a.ambient.toFixed(1)} °C room temperature.
+    </small>
+
     ${notes ? `<ul class="calibration-notes">${notes}</ul>` : ''}
-    ${a.usable ? '<button class="btn green result-apply" id="applyCalibration">Use these values</button>' : ''}`;
+    ${a.usable ? '<button class="btn green result-apply" id="applyCalibration">Use these values</button>' : ''}
+  `;
 
   const applyButton = document.getElementById('applyCalibration');
   if (applyButton) applyButton.addEventListener('click', () => applyCalibrationValues(a));
@@ -399,24 +646,16 @@ function renderCalibrationStatus(status) {
     lastAnalysis = analyseCalibration(status);
   }
 
-  // While a run is active the inputs are locked and kept in sync with the
-  // values the device is actually running with (so a page refresh mid-run
-  // shows the real numbers instead of the HTML defaults). Once idle again,
-  // they're unlocked for the next run; the Room temperature field still gets
-  // a one-time default fill from the device if the user hasn't typed one.
   const litersInput = document.getElementById('calibrationWaterLiters');
-  const targetInput = document.getElementById('calibrationTargetC');
   const ambientInput = document.getElementById('calibrationAmbientC');
-  [litersInput, targetInput, ambientInput].forEach(input => {
+  [litersInput, ambientInput].forEach(input => {
     if (input) input.disabled = !!status.active;
   });
 
   if (status.active) {
     const deviceLiters = Number(status.waterLiters);
-    const deviceTarget = Number(status.targetC);
     const deviceAmbient = Number(status.ambientC);
     if (litersInput && Number.isFinite(deviceLiters)) litersInput.value = deviceLiters;
-    if (targetInput && Number.isFinite(deviceTarget)) targetInput.value = deviceTarget;
     if (ambientInput && Number.isFinite(deviceAmbient)) ambientInput.value = deviceAmbient.toFixed(1);
   } else if (!ambientDefaultSet) {
     ambientDefaultSet = true;
@@ -433,9 +672,7 @@ function renderCalibrationStatus(status) {
   heater.classList.toggle('on', !!status.heaterOn);
   heater.classList.toggle('off', !status.heaterOn);
 
-  document.getElementById('calibrationPhase').textContent = phase === 1
-    ? `Heating to ${Number(status.targetC).toFixed(1)} °C`
-    : PHASE_TEXT[phase] || 'Ready';
+  document.getElementById('calibrationPhase').textContent = PHASE_TEXT[phase] || 'Ready';
   document.getElementById('calibrationStart').classList.toggle('hidden', !!status.active);
   document.getElementById('calibrationStop').classList.toggle('hidden', !status.active);
 
@@ -456,9 +693,6 @@ function renderMixerBadge(status) {
   mixer.classList.toggle('off', !status.mixerOn);
 }
 
-// A mash and a calibration run can't be active at the same time (the device
-// refuses either while the other is going), so keep the Start button locked
-// whenever a mash is running or cooling down, with a hint why.
 function renderMashLock(status) {
   const startBtn = document.getElementById('calibrationStart');
   if (!startBtn) return;
@@ -469,28 +703,42 @@ function renderMashLock(status) {
 
 async function applyCalibrationValues(analysis) {
   const result = document.getElementById('calibrationResult');
+  const a = analysis;
+  const s1 = a.step1;
+  const s2 = a.step2 || a.step1;
+
   try {
     const response = await fetch('saveSettings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        heaterTauSec: analysis.tau,
-        heaterPowerEffW: Math.round(analysis.powerEff),
-        heaterStoreGain: Number(analysis.storeGain.toFixed(3)),
-        heaterLossWPerC: Number(analysis.lossWPerC.toFixed(3)),
-        heaterAmbientC: analysis.ambient
+        heaterT1: 50.0,
+        heaterTau1: Math.round(s1.tau),
+        heaterLossW1: Number(s1.lossW.toFixed(1)),
+        heaterStoreGain1: Number(s1.storeGain.toFixed(3)),
+
+        heaterT2: 70.0,
+        heaterTau2: Math.round(s2.tau),
+        heaterLossW2: Number(s2.lossW.toFixed(1)),
+        heaterStoreGain2: Number(s2.storeGain.toFixed(3)),
+
+        heaterPowerEffW: Math.round(a.powerEff),
+        heaterAmbientC: a.ambient,
+
+        // Legacy fallbacks
+        heaterTauSec: Math.round(s1.tau),
+        heaterStoreGain: Number(s1.storeGain.toFixed(3)),
+        heaterLossWPerC: Number((s1.lossW / Math.max(1, 50.0 - a.ambient)).toFixed(2))
       })
     });
     result.insertAdjacentHTML('beforeend', response.ok
-      ? '<div class="calibration-saved">Saved to Settings.</div>'
+      ? '<div class="calibration-saved">✓ Saved dual-anchor calibration to settings!</div>'
       : '<div class="calibration-error">Could not save values.</div>');
   } catch (error) {
     result.insertAdjacentHTML('beforeend', '<div class="calibration-error">Could not save values.</div>');
   }
 }
 
-// The device sends the log in chunks, starting at ?since=. Keep a local copy
-// and only ask for samples not seen yet; a new runId starts a fresh copy.
 async function fetchCalibrationStatus() {
   for (let request = 0; request < 20; request++) {
     const response = await fetch(`calibrationStatus?since=${calibrationLog.t.length}`);
@@ -509,9 +757,6 @@ async function fetchCalibrationStatus() {
   throw new Error('Calibration log did not load');
 }
 
-// Mash status (mixer badge + the mash-busy lock on Start) is polled on its
-// own timer, independent of the calibration-run poll below, so it stays
-// fresh even while no calibration run is active yet.
 async function pollMashStatus() {
   try {
     const response = await fetch('status');
@@ -520,8 +765,6 @@ async function pollMashStatus() {
     renderMixerBadge(status);
     renderMashLock(status);
   } catch (error) {
-    // Leave the last known state; a connection problem shows up via the
-    // calibration poll's own error handling instead.
   }
 }
 
@@ -551,11 +794,10 @@ function readCalibrationInput(id, min, max, message) {
 
 document.getElementById('calibrationStart').addEventListener('click', async () => {
   const liters = readCalibrationInput('calibrationWaterLiters', 0.1, 100, 'Enter 0.1-100 litres');
-  const target = readCalibrationInput('calibrationTargetC', 40, 80, 'Enter a target of 40-80 °C');
   const ambient = readCalibrationInput('calibrationAmbientC', -10, 45, 'Enter a room temperature of -10-45 °C');
-  if (![liters, target, ambient].every(Number.isFinite)) return;
+  if (![liters, ambient].every(Number.isFinite)) return;
 
-  const query = new URLSearchParams({ liters, target, ambient });
+  const query = new URLSearchParams({ liters, ambient });
   const response = await fetch(`calibrationStart?${query}`, { method: 'POST' });
   if (!response.ok) {
     document.getElementById('calibrationPhase').textContent = await response.text();

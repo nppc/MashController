@@ -1153,26 +1153,29 @@ async function loadSettings() {
         document.getElementById('setHeaterPowerW').value =
           settings.heaterPowerW ?? 2000;
 
-        document.getElementById('setHeaterPowerEffW').value =
-          Math.round(settings.heaterPowerEffW ?? 1900);
-
-        document.getElementById('setHeaterTauSec').value =
-          Math.round(settings.heaterTauSec ?? 90);
-
-        document.getElementById('setHeaterStoreGain').value =
-          Number(settings.heaterStoreGain ?? 1.2).toFixed(2);
-
-        document.getElementById('setHeaterLossWPerC').value =
-          Number(settings.heaterLossWPerC ?? 5).toFixed(2);
-
         document.getElementById('setHeaterAmbientC').value =
           settings.heaterAmbientC ?? 20;
 
-        document.getElementById('setHeaterDeadband').value =
-          Number(settings.heaterDeadband ?? 0.1).toFixed(1);
+        document.getElementById('setHeaterTrimLowC').value =
+          Number(settings.heaterTrimLowC ?? 0.0).toFixed(2);
+
+        document.getElementById('setHeaterTrimHighC').value =
+          Number(settings.heaterTrimHighC ?? 0.0).toFixed(2);
+
+        document.getElementById('setHeaterLossScalePct').value =
+          Math.round(settings.heaterLossScalePct ?? 100);
 
         document.getElementById('setHeaterMinSwitchSec').value =
           settings.heaterMinSwitchSec ?? 10;
+
+        const calTextEl = document.getElementById('calibrationStatusText');
+        if (calTextEl) {
+          if (settings.heaterT2 > settings.heaterT1 + 1.0 && settings.heaterTau1 > 1.0 && settings.heaterTau2 > 1.0) {
+            calTextEl.innerHTML = `Calibrated (${Math.round(settings.heaterTau1)}s @ ${Math.round(settings.heaterT1)}°C, ${Math.round(settings.heaterTau2)}s @ ${Math.round(settings.heaterT2)}°C, P<sub>eff</sub>: ${Math.round(settings.heaterPowerEffW ?? settings.heaterPowerW)}W)`;
+          } else {
+            calTextEl.textContent = 'Uncalibrated (using standard defaults). Run calibration for optimal accuracy.';
+          }
+        }
 
         document.getElementById('setMixerOnSec').value =
             settings.mixerOnSec ?? 5;
@@ -1299,28 +1302,20 @@ async function saveSettings() {
               document.getElementById('setHeaterPowerW').value
             ),
 
-            heaterPowerEffW: parseFloat(
-              document.getElementById('setHeaterPowerEffW').value
-            ),
-
-            heaterTauSec: parseFloat(
-              document.getElementById('setHeaterTauSec').value
-            ),
-
-            heaterStoreGain: parseFloat(
-              document.getElementById('setHeaterStoreGain').value
-            ),
-
-            heaterLossWPerC: parseFloat(
-              document.getElementById('setHeaterLossWPerC').value
-            ),
-
             heaterAmbientC: parseFloat(
               document.getElementById('setHeaterAmbientC').value
             ),
 
-            heaterDeadband: parseFloat(
-              document.getElementById('setHeaterDeadband').value
+            heaterTrimLowC: parseFloat(
+              document.getElementById('setHeaterTrimLowC').value
+            ),
+
+            heaterTrimHighC: parseFloat(
+              document.getElementById('setHeaterTrimHighC').value
+            ),
+
+            heaterLossScalePct: parseFloat(
+              document.getElementById('setHeaterLossScalePct').value
             ),
 
             heaterMinSwitchSec: parseInt(
