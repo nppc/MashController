@@ -45,4 +45,8 @@ void mashProfileCheckCoolDown();
 // call once per READ_INTERVAL_MS pass from loop().
 void mashProfileTick();
 
+// Approximate time remaining in the profile, excluding cooldown.
+float mashProfileEstimatedSecondsRemaining();
+void mashProfileResetEstimatedTime();
+
 #endif

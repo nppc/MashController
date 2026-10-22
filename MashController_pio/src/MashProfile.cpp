@@ -21,6 +21,110 @@ unsigned long pausedElapsedSec = 0;
 bool inCoolDown = false;
 unsigned long coolDownStart = 0;
 
+namespace {
+float estimatedSecondsRemaining = NAN;
+unsigned long estimateUpdatedAt = 0;
+
+float estimateRampSeconds(float fromC, float toC, float capacityJPerC) {
+  if (!isfinite(fromC) || !isfinite(toC) ||
+      !isfinite(capacityJPerC) || !(capacityJPerC > 0.0f)) {
+    return NAN;
+  }
+  if (!(toC > fromC)) return 0.0f;
+
+  const SettingsEE &s = storage.settings();
+  const float powerW = max(s.heaterPowerEffW, 1.0f);
+  const float lossWPerC = max(s.heaterLossWPerC, 0.0f);
+  const float initialPowerW =
+      powerW - lossWPerC * (fromC - s.heaterAmbientC);
+  const float finalPowerW =
+      powerW - lossWPerC * (toC - s.heaterAmbientC);
+  if (!(finalPowerW > 0.0f)) return NAN;
+
+  if (lossWPerC < 0.001f) {
+    return capacityJPerC * (toC - fromC) / powerW;
+  }
+
+  return capacityJPerC / lossWPerC *
+         logf(initialPowerW / finalPowerW);
+}
+
+float calculateEstimatedSecondsRemaining() {
+  if (!isRunning || inCoolDown || activeProfile.stepCount <= 0 ||
+      currentStep < 0 || currentStep >= activeProfile.stepCount) {
+    return NAN;
+  }
+
+  const float waterCapacityJPerC =
+      max(activeProfile.waterMassKg, 0.1f) * 4186.0f;
+  const bool grainAdded =
+      currentStep > 0 && activeProfile.steps[0].time == 0;
+  const bool grainIncludedInFutureRamps =
+      grainAdded || activeProfile.steps[0].time == 0;
+  const float mashCapacityJPerC = waterCapacityJPerC +
+      (grainIncludedInFutureRamps
+           ? max(activeProfile.grainMassKg, 0.0f) * 1900.0f
+           : 0.0f);
+
+  float totalSec = 0.0f;
+  float fromC = readTemperature();
+
+  for (int i = currentStep; i < activeProfile.stepCount; ++i) {
+    const float targetC = activeProfile.steps[i].temp;
+    const float capacity = (i == 0 && !grainAdded)
+                               ? waterCapacityJPerC
+                               : mashCapacityJPerC;
+    const float rampSec = i == currentStep && !waitingForTemp
+                              ? 0.0f
+                              : estimateRampSeconds(fromC, targetC, capacity);
+    if (!isfinite(rampSec)) return NAN;
+    totalSec += rampSec;
+
+    if (i == currentStep) {
+      if (waitingForTemp) {
+        totalSec += max(activeProfile.steps[i].time, 0) * 60.0f;
+      } else if (activeProfile.steps[i].time > 0) {
+        const unsigned long elapsedSec = isPaused
+            ? pausedElapsedSec
+            : (millis() - stepStartTime) / 1000UL;
+        const unsigned long durationSec =
+            (unsigned long)activeProfile.steps[i].time * 60UL;
+        totalSec += elapsedSec >= durationSec
+                        ? 0.0f
+                        : (float)(durationSec - elapsedSec);
+      }
+    } else {
+      totalSec += max(activeProfile.steps[i].time, 0) * 60.0f;
+    }
+    fromC = targetC;
+  }
+
+  return totalSec;
+}
+
+void refreshEstimatedTime() {
+  estimatedSecondsRemaining = calculateEstimatedSecondsRemaining();
+  estimateUpdatedAt = millis();
+}
+
+void updateEstimatedTime() {
+  const unsigned long now = millis();
+  if (estimateUpdatedAt == 0) {
+    estimateUpdatedAt = now;
+    return;
+  }
+
+  const unsigned long elapsedMs = now - estimateUpdatedAt;
+  estimateUpdatedAt = now;
+  if (isRunning && !isPaused && !inCoolDown &&
+      isfinite(estimatedSecondsRemaining)) {
+    const float elapsedSec = (float)elapsedMs / 1000.0f;
+    estimatedSecondsRemaining =
+        max(0.0f, estimatedSecondsRemaining - elapsedSec);
+  }
+}
+}
+
 /* -------------------------------------------------------------------------- */
 /*                         PROFILE LOADING                                    */
 /* -------------------------------------------------------------------------- */
@@ -70,6 +174,8 @@ void advanceStep() {
     mixerManualMode = false;    // Switch to AUTO for cool-down circulation
     mixerOn = false;            // Will cycle on/rest per settings
     mixerPhaseStart = millis();
+    estimatedSecondsRemaining = NAN;
+    estimateUpdatedAt = millis();
 
     Serial.println("Profile finished, entering cool-down phase...");
   } else {
@@ -77,6 +183,7 @@ void advanceStep() {
     stepDurationSec = activeProfile.steps[currentStep].time * 60;
     waitingForTemp = true;
     pausedElapsedSec = 0;
+    refreshEstimatedTime();
   }
 }
 
@@ -101,6 +208,7 @@ void mashProfileCheckCoolDown() {
 }
 
 void mashProfileTick() {
+  updateEstimatedTime();
   if (!(isRunning && !isPaused && !inCoolDown)) return;
 
   float currentTemp = readTemperature();   // cached value - never blocks
@@ -120,6 +228,7 @@ void mashProfileTick() {
         stepStartTime = millis();                   // NOW start timer
         Serial.println("Step timer started");
       }
+      refreshEstimatedTime();
     }
   } else {
     // Timer is running normally
@@ -129,4 +238,12 @@ void mashProfileTick() {
       advanceStep();
     }
   }
+}
+
+float mashProfileEstimatedSecondsRemaining() {
+  return estimatedSecondsRemaining;
+}
+
+void mashProfileResetEstimatedTime() {
+  refreshEstimatedTime();
 }

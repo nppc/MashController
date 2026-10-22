@@ -639,9 +639,21 @@ async function update() {
     chart.options.scales.x.min = now - windowSize;
     chart.options.scales.x.max = now;
 
-  chart.options.plugins.subtitle.text = d.etaSec
-    ? `~${Math.max(1, Math.round(d.etaSec / 60))} min until target`
-    : '';
+    const formatEta = seconds => {
+      const minutes = Math.max(0, Math.round(seconds / 60));
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${minutes}m`;
+    };
+    const programEtaText = Number.isFinite(d.programEtaSec)
+      ? `~${formatEta(d.programEtaSec)} remaining`
+      : '';
+    const rampEtaText = Number.isFinite(d.etaSec)
+      ? `${formatEta(d.etaSec)} to target`
+      : '';
+    chart.options.plugins.subtitle.text = programEtaText && rampEtaText
+      ? `${programEtaText} (${rampEtaText})`
+      : programEtaText || rampEtaText;
 
     chart.update('none');
 
