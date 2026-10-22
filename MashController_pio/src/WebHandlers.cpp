@@ -468,6 +468,8 @@ static void handleData() {
 
   const float eta = heaterEstimatedSecondsToTarget();
   if (isfinite(eta)) doc["etaSec"] = (long)eta;
+  const float programEta = mashProfileEstimatedSecondsRemaining();
+  if (isfinite(programEta)) doc["programEtaSec"] = (long)programEta;
 
   String out;
   serializeJson(doc, out);
@@ -500,6 +502,7 @@ static void handleStartProfile() {
   waitingForTemp = true;
   stepDurationSec = activeProfile.steps[0].time * 60;
   pausedElapsedSec = 0;
+  mashProfileResetEstimatedTime();
 
   // Hand the mixer to auto, starting a fresh rest phase, regardless of
   // whatever mode/state it was left in before the mash started.
@@ -517,6 +520,7 @@ static void handleStopProfile() {
   waitingForTemp = false;
   targetTemperature = NAN;
   heaterOn = false;
+  mashProfileResetEstimatedTime();
 
   // Mixer shouldn't keep cycling with nothing being mashed.
   mixerManualMode = true;

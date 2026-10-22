@@ -34,6 +34,10 @@ A profile is a complete mash schedule: a list of temperature steps (up to 6), ea
 
 A step with its time set to 0 is a manual step: the controller heats to the target temperature and then waits until you press RESUME, for example to add grain. While a profile runs it can be paused, resumed, skipped to the next step or stopped. After the last step the mixer keeps running for a configurable cool-down time if needed.
 
+The temperature chart shows an approximate program time remaining alongside the current ramp estimate. It includes estimated heating ramps and timed steps, pauses whenever the profile is paused, and excludes cooldown and manual waiting time.
+
+Heater calibration is performed with plain water. During a mash, the controller adds an estimated grain heat capacity after you resume the first zero-duration manual step. Set that first step to the temperature where you add grain, add the grain when prompted, then press RESUME. The grain adjustment remains active for later steps. It accounts for grain mass, but does not model the grain's starting temperature or mixing effects.
+
 When a manual step reaches its target temperature, the browser plays a soft chime, repeats it every 20 seconds until you press RESUME or STOP, and flashes the tab title. Browsers block sound until the page has been tapped once (for example after a refresh), so a yellow bar appears while a process is running to let you enable it. The alert can be switched off in Settings (**Sound Alerts**), and **Target Reached Tolerance** sets how many degrees below the target still counts as reached.
 
 ## Heater calibration
