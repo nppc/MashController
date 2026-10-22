@@ -178,7 +178,10 @@
 					   onchange="updateProfileMass('waterMassKg', this.value)">
 			  </div>
 			  <div>
-				<div class="label-small">Grain Mass (kg)</div>
+				<div class="label-small">Grain Mass (kg)
+				  <button type="button" class="help-link" aria-label="Grain Mass help"
+						  onclick="showHelpModal('Grain Mass', 'Heater calibration is performed with plain water. During a mash, the controller adds an estimated grain heat capacity after you resume the first zero-duration manual step. Set that step to the temperature where you add grain, add the grain when prompted, then press RESUME. The grain adjustment remains active for later steps. Grain starting temperature and mixing effects are not modeled.')">?</button>
+				</div>
 				<input id="profileGrainMass" class="input-small" type="number"
 					   step="0.1" min="0" max="50"
 					   onchange="updateProfileMass('grainMassKg', this.value)">
