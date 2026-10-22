@@ -34,19 +34,18 @@ float estimateRampSeconds(float fromC, float toC, float capacityJPerC) {
 
   const SettingsEE &s = storage.settings();
   const float powerW = max(s.heaterPowerEffW, 1.0f);
-  const float lossWPerC = max(s.heaterLossWPerC, 0.0f);
-  const float initialPowerW =
-      powerW - lossWPerC * (fromC - s.heaterAmbientC);
-  const float finalPowerW =
-      powerW - lossWPerC * (toC - s.heaterAmbientC);
-  if (!(finalPowerW > 0.0f)) return NAN;
 
-  if (lossWPerC < 0.001f) {
-    return capacityJPerC * (toC - fromC) / powerW;
-  }
+  // Use Simpson's rule over [fromC, toC] with dynamic heat loss P_loss(T)
+  const float midC = 0.5f * (fromC + toC);
+  const float lossFrom = heaterCurrentLossW(fromC, s);
+  const float lossMid  = heaterCurrentLossW(midC, s);
+  const float lossTo   = heaterCurrentLossW(toC, s);
+  const float avgLossW = (lossFrom + 4.0f * lossMid + lossTo) / 6.0f;
 
-  return capacityJPerC / lossWPerC *
-         logf(initialPowerW / finalPowerW);
+  const float netPowerW = powerW - avgLossW;
+  if (netPowerW <= 1.0f) return NAN;
+
+  return capacityJPerC * (toC - fromC) / netPowerW;
 }
 
 float calculateEstimatedSecondsRemaining() {
@@ -74,9 +73,15 @@ float calculateEstimatedSecondsRemaining() {
     const float capacity = (i == 0 && !grainAdded)
                                ? waterCapacityJPerC
                                : mashCapacityJPerC;
-    const float rampSec = i == currentStep && !waitingForTemp
-                              ? 0.0f
-                              : estimateRampSeconds(fromC, targetC, capacity);
+    float rampSec = 0.0f;
+    if (i == currentStep) {
+      if (waitingForTemp) {
+        float curEta = heaterEstimatedSecondsToTarget();
+        rampSec = isfinite(curEta) ? curEta : estimateRampSeconds(fromC, targetC, capacity);
+      }
+    } else {
+      rampSec = estimateRampSeconds(fromC, targetC, capacity);
+    }
     if (!isfinite(rampSec)) return NAN;
     totalSec += rampSec;
 
@@ -215,6 +220,12 @@ void mashProfileTick() {
 
   // If waiting for temperature -> check if we reached it
   if (waitingForTemp) {
+    static unsigned long lastRampRefreshMs = 0;
+    if (millis() - lastRampRefreshMs >= 10000UL) {
+      lastRampRefreshMs = millis();
+      refreshEstimatedTime();
+    }
+
     // A step counts as reached this many degrees below target (Settings)
     const float toleranceC = storage.settings().targetReachedHystC;
     if (currentTemp >= targetTemperature - toleranceC) {
