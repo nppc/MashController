@@ -1464,6 +1464,17 @@ button:disabled {
   animation: soundBannerPulse 1.4s ease-in-out infinite;
 }
 
+.simulated-sensor-banner {
+  padding: 11px 14px;
+  background: #4a1717;
+  border-bottom: 2px solid #ff5c5c;
+  color: #ffe1e1;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+}
+
 @keyframes soundBannerPulse {
   50% { background: #57491a; }
 }

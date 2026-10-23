@@ -264,16 +264,13 @@ static void handleGetSettings() {
   doc["targetReachedHystC"] = s.targetReachedHystC;
   doc["alertSoundEnabled"] = s.alertSoundEnabled;
 
-  // Read-only DS18B20 info
-  doc["sensorAddress"] = sensorAddressToString();
+  // Sensor source and live DS18B20 information.
+  doc["sensorDebugFake"] = sensorUsingFakeMode();
+  doc["sensorDebugSpeed"] = sensorFakeSpeedMultiplier();
+  doc["sensorAddress"] = sensorUsingFakeMode() ? "SIMULATED" : sensorAddressToString();
   doc["sensorFound"] = sensorFound;
   doc["sensorTempAtRead"] = lastGoodTemp;
   doc["sensorOk"] = sensorOk;
-#ifdef DEBUG_FAKE_TEMP
-  doc["sensorDebugFake"] = true;
-#else
-  doc["sensorDebugFake"] = false;
-#endif
 
   String out;
   serializeJson(doc, out);
@@ -291,6 +288,35 @@ static void handleSaveSettings() {
   DeserializationError err = deserializeJson(doc, body);
   if (err) {
     server.send(400, "text/plain", "JSON parse error");
+    return;
+  }
+
+  if (doc.containsKey("sensorDebugFake") &&
+      !doc["sensorDebugFake"].is<bool>()) {
+    server.send(400, "text/plain", "sensorDebugFake must be a boolean");
+    return;
+  }
+  if (doc.containsKey("sensorDebugSpeed") &&
+      (!doc["sensorDebugSpeed"].is<float>() ||
+       doc["sensorDebugSpeed"].as<float>() < 1.0f ||
+       doc["sensorDebugSpeed"].as<float>() > 20.0f)) {
+    server.send(400, "text/plain", "sensorDebugSpeed must be between 1 and 20");
+    return;
+  }
+  if (doc.containsKey("sensorDebugFake") &&
+      doc["sensorDebugFake"].as<bool>() != sensorUsingFakeMode() &&
+      (isRunning || inCoolDown || calibrationIsActive())) {
+    server.send(409, "text/plain", "Stop the mash or calibration before changing sensor mode");
+    return;
+  }
+  const bool requestedFakeMode =
+      doc.containsKey("sensorDebugFake")
+          ? doc["sensorDebugFake"].as<bool>()
+          : sensorUsingFakeMode();
+  if (doc.containsKey("sensorDebugSpeed") &&
+      doc["sensorDebugSpeed"].as<float>() != sensorFakeSpeedMultiplier() &&
+      requestedFakeMode && (isRunning || inCoolDown || calibrationIsActive())) {
+    server.send(409, "text/plain", "Stop the mash or calibration before changing simulation speed");
     return;
   }
 
@@ -423,16 +449,29 @@ static void handleSaveSettings() {
     return;
   }
 
+  if (doc.containsKey("sensorDebugSpeed") &&
+      !sensorSetFakeSpeedMultiplier(doc["sensorDebugSpeed"].as<float>())) {
+    server.send(409, "text/plain", "Stop the mash or calibration before changing simulation speed");
+    return;
+  }
+  if (doc.containsKey("sensorDebugFake") &&
+      !sensorSetFakeMode(doc["sensorDebugFake"].as<bool>())) {
+    server.send(409, "text/plain", "Stop the mash or calibration before changing sensor mode");
+    return;
+  }
+
   // wifiSSID/wifiPass only take effect on next boot since WiFi.softAP()
   // already ran in setup() by the time this request arrives.
-  server.send(200, "text/plain", "Saved (WiFi changes apply after reboot)");
+  server.send(200, "text/plain",
+              "Settings saved. Sensor mode and speed reset after reboot; Wi-Fi changes apply after reboot.");
 }
 
 static void handleRediscoverSensor() {
-#ifdef DEBUG_FAKE_TEMP
-  server.send(200, "application/json", "{\"sensorFound\":true,\"sensorAddress\":\"DEBUG-FAKE\"}");
-  return;
-#else
+  if (sensorUsingFakeMode()) {
+    server.send(409, "text/plain", "Disable the simulated sensor before rediscovering the DS18B20");
+    return;
+  }
+
   // Don't rediscover mid-conversion - wait for the current read cycle to finish
   if (conversionInProgress) {
     server.send(409, "text/plain", "Sensor read in progress, try again shortly");
@@ -448,7 +487,6 @@ static void handleRediscoverSensor() {
   } else {
     server.send(200, "application/json", "{\"sensorFound\":false}");
   }
-#endif
 }
 
 /* -------------------------------------------------------------------------- */
@@ -497,6 +535,9 @@ static void handleStartProfile() {
 
   targetTemperature = activeProfile.steps[0].temp;
   heaterResetThermalModel(readTemperature(), activeProfile.waterMassKg);
+  if (sensorUsingFakeMode()) {
+    sensorPrepareFakeMash(activeProfile.waterMassKg, readTemperature());
+  }
 
   // Do NOT start timer yet
   waitingForTemp = true;
@@ -559,6 +600,9 @@ static void handleResumeProfile() {
     if (waitingForUser) {
       if (currentStep == 0) {
         heaterIncludeGrain(activeProfile.grainMassKg);
+        if (sensorUsingFakeMode()) {
+          sensorAddFakeGrain(activeProfile.grainMassKg);
+        }
       }
       waitingForUser = false;
       isPaused = false;
@@ -684,6 +728,7 @@ static void handleStatus() {
   StaticJsonDocument<640> doc;
 
   doc["running"] = isRunning;
+  doc["sensorDebugFake"] = sensorUsingFakeMode();
   doc["calibrationActive"] = calibrationIsActive();
   doc["paused"] = isPaused;
   doc["waitingForUser"] = waitingForUser;

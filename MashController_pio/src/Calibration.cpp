@@ -13,10 +13,10 @@
 // and heat loss.
 
 namespace {
-// Raw readings (one every READ_INTERVAL_MS) are averaged per mixer cycle: a
-// block closes when the mixer starts a new run, which cancels the mixing
-// ripple. Blocks shorter than MIN_BLOCK_MS are merged with the next cycle;
-// MAX_BLOCK_MS is a fallback when the mixer is not cycling.
+// Real sensor readings are averaged per mixer cycle to cancel mixing ripple.
+// Fake readings have no mixing ripple, so they are grouped by simulated time.
+// MIN_BLOCK_MS is the minimum block size; MAX_BLOCK_MS is a real-sensor
+// fallback when the mixer is not cycling.
 constexpr unsigned long MIN_BLOCK_MS = 15UL * 1000UL;
 constexpr unsigned long MAX_BLOCK_MS = 60UL * 1000UL;
 
@@ -129,6 +129,10 @@ void addReading(float reading, unsigned long elapsed) {
   blockCount++;
 }
 
+unsigned long calibrationElapsedMs(unsigned long now) {
+  return (unsigned long)((now - startedAt) * sensorSimulationTimeScale());
+}
+
 void finish(uint8_t endPhase) {
   heaterOn = false;
   closeBlock();
@@ -136,7 +140,10 @@ void finish(uint8_t endPhase) {
   phase = endPhase;
   mixerManualMode = true;
   mixerOn = false;
-  finishedElapsedMs = millis() - startedAt;
+  finishedElapsedMs = calibrationElapsedMs(millis());
+  if (sensorUsingFakeMode()) {
+    sensorEndFakeCalibration();
+  }
 }
 
 void appendKey(String &out, const char *key) {
@@ -238,6 +245,9 @@ bool calibrationStart(float newWaterLiters, float /*targetC*/, float newAmbientC
   waterLiters = newWaterLiters;
   ambientC = newAmbientC;
   currentTemp = startTemp;
+  if (sensorUsingFakeMode()) {
+    sensorPrepareFakeCalibration(waterLiters, ambientC, startTemp);
+  }
 
   startedAt = millis();
   lastValidAt = startedAt;
@@ -288,17 +298,23 @@ void calibrationUpdate() {
   if (!active) return;
 
   const unsigned long now = millis();
-  const unsigned long elapsed = now - startedAt;
+  const unsigned long elapsed = calibrationElapsedMs(now);
 
   // A new mixer run starts a new block, once the block covers a full cycle.
-  if (mixerOn && !lastMixerOn && blockCount > 0 &&
+  if (!sensorUsingFakeMode() && mixerOn && !lastMixerOn && blockCount > 0 &&
       elapsed - blockFirstMs >= MIN_BLOCK_MS) {
     closeBlock();
   }
   lastMixerOn = mixerOn;
 
   if (histIndex == lastHistIndex) {
-    if (now - lastValidAt >= SENSOR_FAIL_MS) {
+    unsigned long sensorFailTimeoutMs = SENSOR_FAIL_MS;
+    if (sensorUsingFakeMode()) {
+      sensorFailTimeoutMs = max(
+          sensorFailTimeoutMs,
+          (unsigned long)(2.0f * READ_INTERVAL_MS / sensorSimulationTimeScale()));
+    }
+    if (now - lastValidAt >= sensorFailTimeoutMs) {
       Serial.println("Calibration aborted: temperature sensor unavailable");
       finish(PHASE_SENSOR_FAIL);
       return;
@@ -339,7 +355,9 @@ void calibrationUpdate() {
   }
 
   addReading(reading, elapsed);
-  if (elapsed - blockFirstMs >= MAX_BLOCK_MS) closeBlock();
+  const unsigned long blockLimitMs =
+      sensorUsingFakeMode() ? MIN_BLOCK_MS : MAX_BLOCK_MS;
+  if (elapsed - blockFirstMs >= blockLimitMs) closeBlock();
 
   if (sampleCount >= MAX_SAMPLES) {
     finish(PHASE_LOG_FULL);
@@ -372,7 +390,7 @@ void calibrationUpdate() {
 
 void calibrationStatusJson(String &out, uint16_t firstSample) {
   const SettingsEE &s = storage.settings();
-  const unsigned long elapsedMs = active ? millis() - startedAt : finishedElapsedMs;
+  const unsigned long elapsedMs = active ? calibrationElapsedMs(millis()) : finishedElapsedMs;
   const float temp = active ? currentTemp : readTemperature();
 
   if (firstSample > sampleCount) firstSample = sampleCount;

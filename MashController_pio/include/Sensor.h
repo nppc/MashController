@@ -20,12 +20,22 @@ extern int histIndex;
 
 void sensorInit();     // call once from setup(), after Serial.begin()
 void sensorUpdate();   // call every loop() iteration (real sensor); call
-                        // once per READ_INTERVAL_MS under DEBUG_FAKE_TEMP
+                        // at the speed-adjusted interval in simulated mode
 float readTemperature();
 // Mean of the raw readings from roughly the last windowSec seconds.
 // Averaging over one full mixer cycle removes the mixing ripple.
 float averageTemperature(float windowSec);
 bool discoverSensorAddress();
 String sensorAddressToString();
+bool sensorUsingFakeMode();
+bool sensorSetFakeMode(bool enabled);
+float sensorFakeSpeedMultiplier();
+bool sensorSetFakeSpeedMultiplier(float multiplier);
+float sensorSimulationTimeScale();
+
+void sensorPrepareFakeCalibration(float waterLiters, float ambientC, float initialTemperature);
+void sensorPrepareFakeMash(float waterLiters, float initialTemperature);
+void sensorAddFakeGrain(float grainMassKg);
+void sensorEndFakeCalibration();
 
 #endif

@@ -158,11 +158,20 @@ void loop() {
   // regardless of which code path last changed them.
   applyOutputs();
 
-#ifndef DEBUG_FAKE_TEMP
-  // Real sensor: async conversion state machine, never blocks the web server.
-  // Paces itself against CONVERSION_TIME_MS internally, so call every iteration.
-  sensorUpdate();
-#endif
+  if (sensorUsingFakeMode()) {
+    // Keep simulated-time samples at the real sensor cadence as the model
+    // speeds up by reducing the wall-clock interval between fake readings.
+    static unsigned long lastFakeSensorRead = 0;
+    const unsigned long fakeReadIntervalMs =
+        max(10UL, (unsigned long)(READ_INTERVAL_MS / sensorSimulationTimeScale()));
+    if (millis() - lastFakeSensorRead >= fakeReadIntervalMs) {
+      lastFakeSensorRead = millis();
+      sensorUpdate();
+    }
+  } else {
+    // Real sensor: async conversion state machine, never blocks the web server.
+    sensorUpdate();
+  }
 
   // COOL-DOWN COUNTDOWN: Check frequently, independent of READ_INTERVAL
   // This ensures responsive STOP button and precise timing
@@ -171,12 +180,6 @@ void loop() {
   // MASH TIMING: Only runs every READ_INTERVAL_MS
   if (millis() - lastRead > READ_INTERVAL_MS) {
     lastRead = millis();
-
-#ifdef DEBUG_FAKE_TEMP
-    // Fake sensor: recompute the simulated model on this same cadence,
-    // same as the original blocking code did.
-    sensorUpdate();
-#endif
 
     updateMixer();
     mashProfileTick();

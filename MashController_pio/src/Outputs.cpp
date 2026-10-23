@@ -5,6 +5,7 @@
 #include "Calibration.h"
 #include "Mixer.h"
 #include "MashProfile.h"
+#include "Sensor.h"
 
 // Current cooler SSR state. Declared with external linkage (extern in
 // Outputs.h) so other modules — status display, logging, etc. — can read
@@ -81,7 +82,8 @@ bool heaterOutputActive() {
 void applyOutputs() {
   const uint32_t now = millis();
   const bool heaterActive = heaterOutputActive();
-  digitalWrite(HEATER_PIN, heaterActive ? HIGH : LOW);
+  const bool physicalOutputsEnabled = !sensorUsingFakeMode();
+  digitalWrite(HEATER_PIN, heaterActive && physicalOutputsEnabled ? HIGH : LOW);
 
   // --- Cooler: on with the heater, then for a bounded period matching its
   // last on-time. ---
@@ -105,12 +107,12 @@ void applyOutputs() {
     coolerOn = coolerRunDurationMs > 0 &&
                (now - heaterOffTime) < coolerRunDurationMs;
   }
-  digitalWrite(COOLER_PIN, coolerOn);
+  digitalWrite(COOLER_PIN, coolerOn && physicalOutputsEnabled);
 
   // --- Mixer: soft-start ramp. When mixerOn goes true, the PWM duty ramps up
   // from a low starting value to full speed over MIXER_RAMP_TIME_MS. The final
   // GPIO duty is optionally inverted to support active-low mixer drivers. ---
-  if (!mixerOn) {
+  if (!mixerOn || !physicalOutputsEnabled) {
     analogWrite(MIXER_PIN, applyMixerOutputInvert(0)); // fully off
     mixerWasOn = false;
   } else {

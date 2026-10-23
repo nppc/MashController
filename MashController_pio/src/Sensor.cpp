@@ -2,10 +2,39 @@
 #include "Heater.h"    // updateHeater() runs on every new reading
 #include "Outputs.h"   // fakeReadTemperature() follows the real heater output
 #include "Calibration.h"
+#include "MashProfile.h"
 #include "Storage.h"   // fakeReadTemperature() reads heaterAmbientC from settings
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
+
+namespace {
+constexpr float DEFAULT_FAKE_TEMP_SPEED_MULTIPLIER = 2.0f;
+constexpr float FAKE_TEMP_WATER_LITERS = 10.0f;
+
+bool fakeMode = false;
+float fakeSpeedMultiplier = DEFAULT_FAKE_TEMP_SPEED_MULTIPLIER;
+unsigned long conversionStartTime = 0;
+unsigned long nextConversionAllowedAt = 0;
+unsigned long fakeLastUpdateAt = 0;
+float fakeElementTemp = 15.0f;
+float fakeWaterTemp = 15.0f;
+float fakeSensorTemp = 15.0f;
+float fakeWaterLiters = FAKE_TEMP_WATER_LITERS;
+float fakeGrainMassKg = 0.0f;
+float fakeAmbientOverrideC = NAN;
+
+void resetFakePlant(float waterLiters, float grainMassKg, float ambientC,
+                    float initialTemperature) {
+  fakeWaterLiters = waterLiters;
+  fakeGrainMassKg = grainMassKg;
+  fakeAmbientOverrideC = ambientC;
+  fakeElementTemp = initialTemperature;
+  fakeWaterTemp = initialTemperature;
+  fakeSensorTemp = initialTemperature;
+  fakeLastUpdateAt = millis();
+}
+}
 
 DeviceAddress sensorAddr;
 bool sensorFound = false;
@@ -16,10 +45,6 @@ bool conversionInProgress = false;
 int16_t tempHistory[HISTORY_SIZE];
 int histIndex = 0;
 
-#ifndef DEBUG_FAKE_TEMP
-static unsigned long conversionStartTime = 0;
-static unsigned long nextConversionAllowedAt = 0;
-#endif
 constexpr uint8_t TEMPERATURE_AVERAGE_SAMPLES = 5;
 
 static void addTemp(float t) {
@@ -106,11 +131,6 @@ float averageTemperature(float windowSec) {
 }
 
 void sensorInit() {
-#ifdef DEBUG_FAKE_TEMP
-  Serial.println("DEBUG_FAKE_TEMP active - using simulated temperature, no DS18B20 required");
-  sensorFound = true;
-  sensorOk = true;
-#else
   sensors.begin();
   sensors.setWaitForConversion(false);   // non-blocking conversions
 
@@ -118,63 +138,130 @@ void sensorInit() {
   if (sensorFound) {
     sensors.setResolution(sensorAddr, 12);
   } else {
+    sensorOk = false;
     Serial.println("WARNING: proceeding without a temperature sensor");
   }
-#endif
+  fakeLastUpdateAt = millis();
 }
 
 /* -------------------------------------------------------------------------- */
 /*                           TEMPERATURE SIMULATION                           */
-/*        (kept for debugging - only compiled in when DEBUG_FAKE_TEMP is on)  */
+/*          (compiled in, but only used when simulated mode is selected)     */
 /* -------------------------------------------------------------------------- */
 
-#ifdef DEBUG_FAKE_TEMP
-// Simulated 20 L pot on a 2 kW under-base element. The element and pot base
+// Simulated pot on an under-base element. The element and pot base
 // store heat and pass it on to the water, so the temperature keeps rising
-// after switch-off, just like the real hardware. Starts at 15 C so the
-// calibration test can be run against it.
-// Scales how fast the simulated temperature moves, without changing the
-// cadence sensorUpdate() is called at. 1.0 = physically-accurate real time
-// (tau = 83 s for the element). Bump this up to speed through testing -
-// e.g. 10.0 makes the whole simulation play out 10x faster.
-// At moderate multipliers (5–20x) you should be fine; 
-//  if you push much higher, you may need to increase SUBSTEPS too 
-//  so dt/SUBSTEPS stays small enough to keep the simulation stable.
-#ifndef FAKE_TEMP_SPEED_MULTIPLIER
-#define FAKE_TEMP_SPEED_MULTIPLIER 2.0f
-#endif
+// after switch-off, just like the real hardware. It starts at 15 C after boot.
+// Calibration resets it to its current reading and supplies its own water
+// volume and ambient temperature.
+// Set this to speed up the simulation; sampling cadence and calibration
+// timestamps scale with it so fitted physical parameters remain unchanged.
+
+void sensorPrepareFakeCalibration(float waterLiters, float ambientC, float initialTemperature) {
+  resetFakePlant(waterLiters, 0.0f, ambientC, initialTemperature);
+}
+
+void sensorPrepareFakeMash(float waterLiters, float initialTemperature) {
+  resetFakePlant(waterLiters, 0.0f, storage.settings().heaterAmbientC,
+                 initialTemperature);
+}
+
+void sensorAddFakeGrain(float grainMassKg) {
+  fakeGrainMassKg += max(grainMassKg, 0.0f);
+}
+
+void sensorEndFakeCalibration() {
+  fakeWaterLiters = FAKE_TEMP_WATER_LITERS;
+  fakeGrainMassKg = 0.0f;
+  fakeAmbientOverrideC = NAN;
+}
+
+bool sensorUsingFakeMode() {
+  return fakeMode;
+}
+
+float sensorFakeSpeedMultiplier() {
+  return fakeSpeedMultiplier;
+}
+
+bool sensorSetFakeSpeedMultiplier(float multiplier) {
+  if (!isfinite(multiplier) || multiplier < 1.0f || multiplier > 20.0f) return false;
+  if (fakeMode && (isRunning || inCoolDown || calibrationIsActive())) return false;
+  fakeSpeedMultiplier = multiplier;
+  return true;
+}
+
+bool sensorSetFakeMode(bool enabled) {
+  if (enabled == fakeMode) return true;
+  if (isRunning || inCoolDown || calibrationIsActive()) return false;
+
+  conversionInProgress = false;
+  nextConversionAllowedAt = 0;
+  heaterOn = false;
+
+  if (enabled) {
+    const float initialTemperature = isfinite(lastGoodTemp) ? lastGoodTemp : 15.0f;
+    fakeMode = true;
+    sensorPrepareFakeCalibration(FAKE_TEMP_WATER_LITERS,
+                                 storage.settings().heaterAmbientC,
+                                 initialTemperature);
+    sensorFound = true;
+    sensorOk = true;
+    lastGoodTemp = initialTemperature;
+    histIndex = 0;
+    addTemp(initialTemperature);
+    Serial.println("Temperature source switched to simulation");
+  } else {
+    fakeMode = false;
+    sensorFound = discoverSensorAddress();
+    sensorOk = sensorFound;
+    if (sensorFound) sensors.setResolution(sensorAddr, 12);
+    histIndex = 0;
+    lastGoodTemp = NAN;
+    Serial.println(sensorFound
+                       ? "Temperature source switched to DS18B20"
+                       : "DS18B20 not found after leaving simulation");
+  }
+  return true;
+}
 
 static float fakeReadTemperature() {
-  const float POWER_W = storage.settings().heaterPowerW;   // 2 kW under-base element
+  const float POWER_W = storage.settings().heaterPowerW;
   constexpr float TRANSFER_W_PER_C = 30.0f;
-  constexpr float ELEMENT_J_PER_C = 2500.0f;   // tau = 2500 / 30 = 83 s
-  constexpr float WATER_J_PER_C = 10.0f * 4186.0f; // 10 liters
+  constexpr float ELEMENT_J_PER_C = 2500.0f;
   constexpr float LOSS_W_PER_C = 5.0f;
-  const float AMBIENT_C = storage.settings().heaterAmbientC;
   constexpr float SENSOR_TAU_SEC = 10.0f;
-  constexpr int SUBSTEPS = 4;
+  constexpr int MIN_SUBSTEPS = 4;
 
-  static float elementTemp = 15.0f;
-  static float waterTemp = 15.0f;
-  static float sensorTemp = 15.0f;
-
-  const float dt = (float)READ_INTERVAL_MS / 1000.0f / SUBSTEPS
-                    * FAKE_TEMP_SPEED_MULTIPLIER;
+  const float waterCapacityJPerC =
+      fakeWaterLiters * 4186.0f + fakeGrainMassKg * 1900.0f;
+  const float ambientC = isfinite(fakeAmbientOverrideC)
+      ? fakeAmbientOverrideC
+      : storage.settings().heaterAmbientC;
+  const unsigned long now = millis();
+  const float elapsedSimSec =
+      (float)(now - fakeLastUpdateAt) / 1000.0f * sensorSimulationTimeScale();
+  fakeLastUpdateAt = now;
+  const int substeps = max(MIN_SUBSTEPS, (int)ceilf(elapsedSimSec));
+  const float dt = elapsedSimSec / substeps;
   const float power = heaterOutputActive() ? POWER_W : 0.0f;
 
-  for (int i = 0; i < SUBSTEPS; i++) {
-    const float toWater = TRANSFER_W_PER_C * (elementTemp - waterTemp);
-    const float loss = LOSS_W_PER_C * (waterTemp - AMBIENT_C);
-    elementTemp += (power - toWater) * dt / ELEMENT_J_PER_C;
-    waterTemp += (toWater - loss) * dt / WATER_J_PER_C;
-    sensorTemp += (waterTemp - sensorTemp) * dt / SENSOR_TAU_SEC;
+  for (int i = 0; i < substeps; i++) {
+    const float toWater = TRANSFER_W_PER_C * (fakeElementTemp - fakeWaterTemp);
+    const float loss = LOSS_W_PER_C * (fakeWaterTemp - ambientC);
+    fakeElementTemp += (power - toWater) * dt / ELEMENT_J_PER_C;
+    fakeWaterTemp += (toWater - loss) * dt / waterCapacityJPerC;
+    fakeSensorTemp += (fakeWaterTemp - fakeSensorTemp) * dt / SENSOR_TAU_SEC;
   }
 
   // DS18B20: small noise, 12-bit (1/16 C) resolution.
-  const float noisy = sensorTemp + (float)random(-3, 4) / 100.0f;
+  const float noisy = fakeSensorTemp + (float)random(-3, 4) / 100.0f;
   return roundf(noisy * 16.0f) / 16.0f;
 }
-#endif // DEBUG_FAKE_TEMP
+
+float sensorSimulationTimeScale() {
+  return fakeMode ? fakeSpeedMultiplier : 1.0f;
+}
 
 // Drives temperature acquisition without blocking the HTTP server.
 // - Real sensor: kicks off a conversion, then reads it back once
@@ -182,17 +269,19 @@ static float fakeReadTemperature() {
 //   Paced to roughly once per READ_INTERVAL_MS so OneWire bit-banging
 //   (which briefly disables interrupts) doesn't run back-to-back and
 //   starve the WiFi/HTTP stack.
-// - DEBUG_FAKE_TEMP: recomputes the simulated model - call this once per
-//   READ_INTERVAL_MS, same cadence as the original code.
+// - Fake mode: advances the model by elapsed wall time scaled by its speed
+//   multiplier; main.cpp paces calls to preserve sample spacing.
 void sensorUpdate() {
-#ifdef DEBUG_FAKE_TEMP
-  float t = fakeReadTemperature();
-  sensorFound = true;
-  sensorOk = true;
-  lastGoodTemp = t;
-  addTemp(t);
-  updateHeater();
-#else
+  if (fakeMode) {
+    const float t = fakeReadTemperature();
+    sensorFound = true;
+    sensorOk = true;
+    lastGoodTemp = t;
+    addTemp(t);
+    updateHeater();
+    return;
+  }
+
   if (!sensorFound) {
     sensorOk = false;
     heaterOn = false;
@@ -237,5 +326,4 @@ void sensorUpdate() {
       nextConversionAllowedAt = now;
     }
   }
-#endif
 }

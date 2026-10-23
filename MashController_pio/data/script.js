@@ -254,6 +254,8 @@ async function updateStatus() {
     controllerStatus = st;
 
     handleAttentionAlert(st);
+    document.getElementById('simulatedSensorBanner')
+      .classList.toggle('hidden', !st.sensorDebugFake);
 
     updateProcessUI(st);
 
@@ -1203,6 +1205,10 @@ async function loadSettings() {
 
 		document.getElementById('setAlertSound').checked =
 			settings.alertSoundEnabled ?? true;
+		document.getElementById('setSensorDebugFake').checked =
+		    !!settings.sensorDebugFake;
+		document.getElementById('setSensorDebugSpeed').value =
+		    settings.sensorDebugSpeed ?? 2;
 
         currentWifiMode = settings.wifiMode ?? 0;
         wifiSettings.ap.ssid = settings.wifiApSSID ?? 'MashController';
@@ -1239,7 +1245,9 @@ function renderSensorInfo(s) {
 
     if (!addrEl || !tempEl || !statusEl) return;
 
-    addrEl.textContent = s.sensorFound ? s.sensorAddress : 'Not found';
+    addrEl.textContent = s.sensorDebugFake
+        ? 'SIMULATED'
+        : (s.sensorFound ? s.sensorAddress : 'Not found');
     tempEl.textContent = s.sensorFound
         ? `${Number(s.sensorTempAtRead).toFixed(1)} °C`
         : '-- °C';
@@ -1270,7 +1278,7 @@ async function rediscoverSensor() {
         const res = await fetch('rediscoverSensor', { method: 'POST' });
 
         if (res.status === 409) {
-            showToast('Sensor read in progress, try again shortly', 'error');
+            showToast(await res.text(), 'error');
             return;
         }
 
@@ -1351,6 +1359,10 @@ async function saveSettings() {
 			),
 
 			alertSoundEnabled: document.getElementById('setAlertSound').checked,
+			sensorDebugFake: document.getElementById('setSensorDebugFake').checked,
+			sensorDebugSpeed: parseFloat(
+                document.getElementById('setSensorDebugSpeed').value
+            ),
 
             wifiMode: currentWifiMode,
             wifiApSSID: wifiSettings.ap.ssid,
@@ -1372,7 +1384,8 @@ async function saveSettings() {
           throw new Error(errText || `Settings save failed (${response.status})`);
         }
 
-        showToast('Settings saved');
+        showToast(await response.text());
+        await loadSettings();
 
         const wifiChanged = (settings.wifiMode !== currentWifiMode) ||
             (wifiSettings.ap.ssid !== settings.wifiApSSID) ||

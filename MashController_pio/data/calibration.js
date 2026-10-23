@@ -41,6 +41,12 @@ function formatNumber(value, decimals, unit = '') {
   return Number.isFinite(value) ? `${value.toFixed(decimals)}${unit}` : '--';
 }
 
+function optionalNumber(value) {
+  return value === null || value === undefined || value === ''
+    ? NaN
+    : Number(value);
+}
+
 function average(values) {
   return values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : NaN;
 }
@@ -146,7 +152,7 @@ function predictedRise(storedJ, capacity, lossW, tau) {
 
 function analyseCalibration(status) {
   const samples = calibrationSamples(status);
-  const off1 = Number(status.heatEnd1Sec);
+  const off1 = optionalNumber(status.heatEnd1Sec);
   if (!Number.isFinite(off1)) return null;
 
   const capacity = Number(status.waterLiters) * WATER_J_PER_L_C;
@@ -154,8 +160,8 @@ function analyseCalibration(status) {
   const rated = Number(status.heaterPowerW);
   const t1 = Number(status.target1C || 50.0);
   const t2 = Number(status.target2C || 70.0);
-  const step2Start = Number(status.step2StartSec);
-  const off2 = Number(status.heatEnd2Sec);
+  const step2Start = optionalNumber(status.step2StartSec);
+  const off2 = optionalNumber(status.heatEnd2Sec);
 
   const warnings = [];
   const errors = [];
@@ -196,9 +202,9 @@ function analyseCalibration(status) {
     lossW: lossW1,
     coastMean: coast1Mean,
     storeGain: storeGain1,
-    peakTemp: Number(status.peakTemp1),
-    peakCoastSec: Number(status.peakCoast1Sec),
-    measuredRise: Number(status.peakTemp1) - fit1.A
+    peakTemp: optionalNumber(status.peakTemp1),
+    peakCoastSec: optionalNumber(status.peakCoast1Sec),
+    measuredRise: optionalNumber(status.peakTemp1) - fit1.A
   };
 
   // Check Step 2
@@ -244,9 +250,9 @@ function analyseCalibration(status) {
         lossW: lossW2,
         coastMean: coast2Mean,
         storeGain: storeGain2,
-        peakTemp: Number(status.peakTemp2),
-        peakCoastSec: Number(status.peakCoast2Sec),
-        measuredRise: Number(status.peakTemp2) - fit2.A
+        peakTemp: optionalNumber(status.peakTemp2),
+        peakCoastSec: optionalNumber(status.peakCoast2Sec),
+        measuredRise: optionalNumber(status.peakTemp2) - fit2.A
       };
     }
   }
@@ -343,8 +349,8 @@ function calibrationChartSvg(samples, status, analysis, tMin, tMax, label) {
   const W = 600, H = 220, L = 44, R = 10, T = 10, B = 26;
   const t1 = Number(status.target1C || 50.0);
   const t2 = Number(status.target2C || 70.0);
-  const off1 = Number(status.heatEnd1Sec);
-  const off2 = Number(status.heatEnd2Sec);
+  const off1 = optionalNumber(status.heatEnd1Sec);
+  const off2 = optionalNumber(status.heatEnd2Sec);
   const shown = samples.filter(p => p.t >= tMin && p.t <= tMax);
   if (!shown.length) return '';
   let yMin = Math.min(...shown.map(p => p.T));
@@ -427,8 +433,8 @@ function renderCalibrationChart(samples, status, analysis) {
   const tEnd = Math.max(samples[samples.length - 1].t, 60);
   let html = calibrationChartSvg(samples, status, analysis, 0, tEnd, 'Complete Run');
 
-  const off1 = Number(status.heatEnd1Sec);
-  const step2Start = Number(status.step2StartSec);
+  const off1 = optionalNumber(status.heatEnd1Sec);
+  const step2Start = optionalNumber(status.step2StartSec);
   if (Number.isFinite(off1)) {
     const endCoast1 = Number.isFinite(step2Start) ? step2Start : tEnd;
     if (endCoast1 - off1 >= 30) {
@@ -436,7 +442,7 @@ function renderCalibrationChart(samples, status, analysis) {
     }
   }
 
-  const off2 = Number(status.heatEnd2Sec);
+  const off2 = optionalNumber(status.heatEnd2Sec);
   if (Number.isFinite(off2) && tEnd - off2 >= 30) {
     html += calibrationChartSvg(samples, status, analysis, Math.max(0, off2 - 180), tEnd, 'Step 2: 70 °C Peak & Coast');
   }
@@ -444,30 +450,13 @@ function renderCalibrationChart(samples, status, analysis) {
   chart.innerHTML = html;
 }
 
-function renderCalibrationTable(samples, status) {
-  const off1 = Number(status.heatEnd1Sec);
-  const step2Start = Number(status.step2StartSec);
-  const off2 = Number(status.heatEnd2Sec);
-
-  document.getElementById('calibrationSampleCount').textContent = samples.length;
-  document.getElementById('calibrationSamples').innerHTML = samples.length
-    ? samples.map(p => {
-        let phase = 'Heat to 50°C';
-        if (Number.isFinite(off2) && p.t >= off2) phase = 'Coast at 70°C';
-        else if (Number.isFinite(step2Start) && p.t >= step2Start) phase = 'Heat to 70°C';
-        else if (Number.isFinite(off1) && p.t >= off1) phase = 'Coast at 50°C';
-        return `<tr><td>${calibrationFormatTime(p.t)}</td><td>${phase}</td><td>${p.T.toFixed(2)} °C</td></tr>`;
-      }).join('')
-    : '<tr><td colspan="3">No readings yet</td></tr>';
-}
-
 function renderLiveMetrics(status, samples, analysis) {
   const phase = Number(status.phase);
   const current = Number(status.currentTemp);
   const now = samples.length ? samples[samples.length - 1].t : 0;
-  const off1 = Number(status.heatEnd1Sec);
-  const step2Start = Number(status.step2StartSec);
-  const off2 = Number(status.heatEnd2Sec);
+  const off1 = optionalNumber(status.heatEnd1Sec);
+  const step2Start = optionalNumber(status.step2StartSec);
+  const off2 = optionalNumber(status.heatEnd2Sec);
 
   let items = [];
 
@@ -483,10 +472,10 @@ function renderLiveMetrics(status, samples, analysis) {
       ['Water Power', formatNumber(reg ? reg.slope * status.waterLiters * WATER_J_PER_L_C : NaN, 0, ' W')]
     ];
   } else if (phase === 2) { // Coasting at 50 °C
-    const peak = Number(status.peakTemp1);
+    const peak = optionalNumber(status.peakTemp1);
     const peakKnown = Number.isFinite(peak);
     const coastNow = now - off1;
-    const peakCoast = Number(status.peakCoast1Sec);
+    const peakCoast = optionalNumber(status.peakCoast1Sec);
     items = [
       ['50 °C Peak so far', peakKnown ? formatNumber(peak, 2, ' °C') : 'Waiting for peak'],
       ['Rise since off', peakKnown ? formatNumber(peak - 50.0, 2, ' °C') : '--'],
@@ -505,10 +494,10 @@ function renderLiveMetrics(status, samples, analysis) {
       ['Water Power', formatNumber(reg ? reg.slope * status.waterLiters * WATER_J_PER_L_C : NaN, 0, ' W')]
     ];
   } else if (phase === 4) { // Coasting at 70 °C
-    const peak = Number(status.peakTemp2);
+    const peak = optionalNumber(status.peakTemp2);
     const peakKnown = Number.isFinite(peak);
     const coastNow = now - off2;
-    const peakCoast = Number(status.peakCoast2Sec);
+    const peakCoast = optionalNumber(status.peakCoast2Sec);
     items = [
       ['70 °C Peak so far', peakKnown ? formatNumber(peak, 2, ' °C') : 'Waiting for peak'],
       ['Rise since off', peakKnown ? formatNumber(peak - 70.0, 2, ' °C') : '--'],
@@ -678,7 +667,6 @@ function renderCalibrationStatus(status) {
 
   renderLiveMetrics(status, samples, lastAnalysis);
   renderCalibrationChart(samples, status, lastAnalysis);
-  renderCalibrationTable(samples, status);
 
   if (status.completed) {
     renderCalibrationResult(lastAnalysis);
@@ -815,7 +803,6 @@ document.getElementById('calibrationStop').addEventListener('click', async () =>
   await pollCalibration();
 });
 
-renderCalibrationTable([], {});
 pollMashStatus();
 setInterval(pollMashStatus, 3000);
 pollCalibration().then(() => {

@@ -3,10 +3,6 @@
 
 #include <Arduino.h>
 
-// Uncomment to use the simulated temperature model instead of a real
-// DS18B20 sensor - handy for testing mash logic/UI without hardware.
-// #define DEBUG_FAKE_TEMP
-
 #define ONE_WIRE_BUS D1
 
 // Heater SSR: driven directly, active-high (GPIO HIGH -> SSR on).

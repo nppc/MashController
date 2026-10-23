@@ -132,7 +132,9 @@ void updateHeater() {
 
   // Advance the stored-heat model with dynamic parameters and SSR history
   model.configure(s.heaterPowerEffW, tauSec, storeGain);
-  const float dtSec = min(now - previousUpdateAt, 10000UL) / 1000.0f;
+  const float simulationScale = sensorSimulationTimeScale();
+  const float elapsedWallSec = (float)(now - previousUpdateAt) / 1000.0f;
+  const float dtSec = min(elapsedWallSec * simulationScale, 10.0f);
   model.update(dtSec, outputWasOn);
   previousUpdateAt = now;
 
@@ -147,7 +149,8 @@ void updateHeater() {
 
   const bool switchLocked =
       hasSwitched &&
-      (now - lastSwitchAt < (unsigned long)s.heaterMinSwitchSec * 1000UL);
+      ((float)(now - lastSwitchAt) * simulationScale <
+       (float)s.heaterMinSwitchSec * 1000.0f);
 
   if (!switchLocked) {
     if (!heaterOn && predictedPeak < effTarget - s.heaterDeadband) {
@@ -207,14 +210,15 @@ float heaterEstimatedSecondsToTarget()
      * counting down the previously calculated ETA.
      */
     unsigned long nowMs = millis();
+    const float simulationScale = sensorSimulationTimeScale();
 
     HeaterModel sim = model;
 
     float T = lastWaterNowC;
     bool on = heaterOn;
 
-    unsigned long simSwitchElapsedMs =
-        nowMs - lastSwitchAt;
+    float simSwitchElapsedMs =
+        (float)(nowMs - lastSwitchAt) * simulationScale;
 
     const float dt = 2.0f;
     const int maxSteps = (int)(3600.0f / dt);
@@ -232,17 +236,17 @@ float heaterEstimatedSecondsToTarget()
         float rate = (sim.flowW() - lossW) / capacityJPerC;
         T += rate * dt;
 
-        simSwitchElapsedMs += (unsigned long)(dt * 1000.0f);
+        simSwitchElapsedMs += dt * 1000.0f;
 
         /*
          * One simulation step has already been performed when i == 0.
          */
         if (T >= effTarget) {
-            etaRaw = (float)(i + 1) * dt;
+            etaRaw = (float)(i + 1) * dt / simulationScale;
             break;
         }
 
-        bool locked = simSwitchElapsedMs < (unsigned long)s.heaterMinSwitchSec * 1000UL;
+        bool locked = simSwitchElapsedMs < (float)s.heaterMinSwitchSec * 1000.0f;
 
         if (!locked) {
             float peak = sim.predictPeak(T, capacityJPerC, lossW);

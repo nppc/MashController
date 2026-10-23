@@ -55,6 +55,7 @@ The DS18B20 sensor is factory-calibrated, so the sensor itself is not calibrated
 - Pause, resume and skip controls while a profile is running
 - Audible browser alert when a manual step reaches its temperature
 - Browser-based dashboard for monitoring and configuration
+- Temporary simulated sensor mode and adjustable simulation speed for testing; real heater, mixer and cooler outputs are disabled in this mode
 - Automatic heater calibration (time constant, effective power, store gain, heat loss)
 - OTA (Over-the-Air) update support
 
