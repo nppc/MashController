@@ -153,7 +153,7 @@ void updateHeater() {
        (float)s.heaterMinSwitchSec * 1000.0f);
 
   if (!switchLocked) {
-    if (!heaterOn && predictedPeak < effTarget - s.heaterDeadband) {
+    if (!heaterOn && predictedPeak < effTarget - HEATER_DEADBAND_C) {
       heaterOn = true;
       lastSwitchAt = now;
       hasSwitched = true;
@@ -250,7 +250,7 @@ float heaterEstimatedSecondsToTarget()
 
         if (!locked) {
             float peak = sim.predictPeak(T, capacityJPerC, lossW);
-            if (!on && peak < effTarget - s.heaterDeadband) {
+            if (!on && peak < effTarget - HEATER_DEADBAND_C) {
                 on = true;
                 simSwitchElapsedMs = 0;
             } else if (on && peak >= effTarget) {

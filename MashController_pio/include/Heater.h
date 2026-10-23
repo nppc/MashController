@@ -1,6 +1,10 @@
 #ifndef HEATER_H
 #define HEATER_H
 
+// Predicted peak must fall this far below effective target before heater turns back on.
+// Tight value (0.05 °C) suitable for SSRs without mechanical contact wear.
+constexpr float HEATER_DEADBAND_C = 0.02f;
+
 extern bool heaterOn;
 
 void heaterResetThermalModel(float initialTemperature, float waterMassKg);

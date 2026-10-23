@@ -243,7 +243,7 @@ static void handleGetSettings() {
   doc["heaterStoreGain"] = s.heaterStoreGain;
   doc["heaterLossWPerC"] = s.heaterLossWPerC;
   doc["heaterAmbientC"] = s.heaterAmbientC;
-  doc["heaterDeadband"] = s.heaterDeadband;
+  doc["heaterDeadband"] = HEATER_DEADBAND_C;
   doc["heaterMinSwitchSec"] = s.heaterMinSwitchSec;
 
   doc["heaterT1"] = s.heaterT1;
