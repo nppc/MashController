@@ -1152,7 +1152,7 @@ function renderWifiUI() {
                 : 'Network password';
         }
         if (notice) {
-            notice.textContent = 'Controller connects to your home Wi-Fi network and is accessible at http://mash.local. If connection fails within 15s, it will automatically fall back to Local AP.';
+            notice.textContent = 'Controller connects to your home Wi-Fi network. If it cannot connect for 2 minutes, it starts the Local AP while continuing to retry the external network.';
         }
     }
 }
@@ -1223,9 +1223,17 @@ async function loadSettings() {
         if (statusBadge) {
             const activeMode = settings.wifiActiveMode ?? 'AP';
             const ip = settings.wifiIP ?? '';
-            statusBadge.textContent = `${activeMode}: ${ip}`;
-            statusBadge.classList.toggle('status-ok', activeMode === 'STA');
-            statusBadge.classList.toggle('off', activeMode !== 'STA');
+            const mac = settings.wifiMac ?? '';
+            const connected = settings.wifiConnected ?? activeMode === 'STA';
+            const stationMode = activeMode === 'STA' || activeMode === 'AP+STA';
+            statusBadge.textContent =
+                activeMode === 'AP+STA' && !connected ? 'AP+STA (STA offline)' : activeMode;
+            statusBadge.classList.toggle('status-ok', stationMode && connected);
+            statusBadge.classList.toggle('off', !stationMode || !connected);
+            const networkInfo = document.getElementById('wifiNetworkInfo');
+            if (networkInfo) {
+                networkInfo.textContent = `IP: ${ip}  |  MAC: ${mac}`;
+            }
         }
 
         renderWifiUI();

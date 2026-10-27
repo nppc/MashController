@@ -233,9 +233,23 @@ static void handleGetSettings() {
   doc["wifiSSID"] = (s.wifiMode == WIFI_MODE_STA) ? s.wifiStaSSID : s.wifiApSSID;
   doc["wifiPassSet"] = (s.wifiMode == WIFI_MODE_STA) ? (strlen(s.wifiStaPass) > 0) : (strlen(s.wifiApPass) > 0);
 
-  const bool isStaConnected = (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED);
-  doc["wifiActiveMode"] = isStaConnected ? "STA" : "AP";
-  doc["wifiIP"] = isStaConnected ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+  const WiFiMode_t wifiMode = WiFi.getMode();
+  const bool stationEnabled = (wifiMode & WIFI_STA) != 0;
+  const bool apEnabled = (wifiMode & WIFI_AP) != 0;
+  const bool isStaConnected =
+      stationEnabled && WiFi.status() == WL_CONNECTED &&
+      WiFi.localIP() != IPAddress(0, 0, 0, 0);
+  doc["wifiActiveMode"] = stationEnabled
+                              ? (apEnabled ? "AP+STA" : "STA")
+                              : "AP";
+  doc["wifiConnected"] = stationEnabled ? isStaConnected : apEnabled;
+  doc["wifiIP"] = isStaConnected
+                      ? WiFi.localIP().toString()
+                      : (apEnabled ? WiFi.softAPIP().toString()
+                                   : String("Disconnected"));
+  doc["wifiMac"] = isStaConnected || !apEnabled
+                       ? WiFi.macAddress()
+                       : WiFi.softAPmacAddress();
 
   doc["heaterPowerW"] = s.heaterPowerW;
   doc["heaterPowerEffW"] = s.heaterPowerEffW;

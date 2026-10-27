@@ -19,6 +19,36 @@
 
 /* ---- Timing ---- */
 unsigned long lastRead = 0;
+unsigned long lastWifiCheck = 0;
+unsigned long lastWifiReconnectAttempt = 0;
+unsigned long stationConnectStarted = 0;
+bool stationModeActive = false;
+bool wifiWasConnected = false;
+bool mdnsStarted = false;
+
+static void startLocalAccessPoint() {
+  SettingsEE &s = storage.settings();
+  const size_t passwordLength = strlen(s.wifiApPass);
+  bool started;
+  if (passwordLength == 0 || passwordLength < 8) {
+    if (passwordLength > 0) {
+      Serial.println("WiFi AP password is too short; starting open AP");
+    }
+    started = WiFi.softAP(s.wifiApSSID);
+  } else {
+    started = WiFi.softAP(s.wifiApSSID, s.wifiApPass);
+  }
+
+  if (!started) {
+    Serial.println("ERROR: failed to start local WiFi AP");
+    return;
+  }
+
+  Serial.print("AP SSID: ");
+  Serial.println(s.wifiApSSID);
+  Serial.print("AP IP: ");
+  Serial.println(WiFi.softAPIP());
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                   SETUP                                    */
@@ -69,13 +99,16 @@ void setup() {
   }
 
   WiFi.persistent(false);
+  WiFi.setAutoConnect(false);
   WiFi.setAutoReconnect(true);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  WiFi.setOutputPower(20.5f);
 
   // Set device hostname so router DHCP assigns "mash" in local DNS
   WiFi.hostname("mash");
 
-  bool connectedSta = false;
-  if (s.wifiMode == WIFI_MODE_STA && strlen(s.wifiStaSSID) > 0) {
+  stationModeActive = s.wifiMode == WIFI_MODE_STA && strlen(s.wifiStaSSID) > 0;
+  if (stationModeActive) {
     // Pure Station mode: connect to external router, keep AP off
     WiFi.softAPdisconnect(true);
     WiFi.disconnect();
@@ -89,49 +122,47 @@ void setup() {
     } else {
       WiFi.begin(s.wifiStaSSID);
     }
+    stationConnectStarted = millis();
+    lastWifiReconnectAttempt = millis();
 
     unsigned long startAttemptTime = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) {
+    while ((WiFi.status() != WL_CONNECTED ||
+            WiFi.localIP() == IPAddress(0, 0, 0, 0)) &&
+           millis() - startAttemptTime < 15000) {
       delay(250);
       Serial.print(".");
     }
     Serial.println();
 
-    if (WiFi.status() == WL_CONNECTED) {
-      connectedSta = true;
+    if (WiFi.status() == WL_CONNECTED &&
+        WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
+      wifiWasConnected = true;
       Serial.print("WiFi connected to router! Station IP: ");
       Serial.println(WiFi.localIP());
+      Serial.print("Connected AP BSSID: ");
+      Serial.println(WiFi.BSSIDstr());
+      Serial.print("Default gateway: ");
+      Serial.println(WiFi.gatewayIP());
     } else {
-      Serial.println("Warning: could not connect to router within 15s. Falling back to Local AP...");
+      Serial.println("Warning: could not connect within 15s; continuing STA retries before AP fallback.");
     }
   }
 
-  if (!connectedSta) {
-    // Pure Local AP mode (either selected, or fallback if router connection failed)
+  if (!stationModeActive) {
+    // Pure Local AP mode when selected or when station credentials are missing.
     WiFi.disconnect(true);
     WiFi.mode(WIFI_AP);
     Serial.println("Starting WiFi in Local AP mode...");
-
-    const size_t passwordLength = strlen(s.wifiApPass);
-    if (passwordLength == 0) {
-      WiFi.softAP(s.wifiApSSID);
-    } else if (passwordLength >= 8) {
-      WiFi.softAP(s.wifiApSSID, s.wifiApPass);
-    } else {
-      Serial.println("WiFi AP password is too short; starting open AP");
-      WiFi.softAP(s.wifiApSSID);
-    }
-
-    Serial.print("AP SSID: ");
-    Serial.println(s.wifiApSSID);
-    Serial.print("AP IP: ");
-    Serial.println(WiFi.softAPIP());
+    startLocalAccessPoint();
   }
+
+  lastWifiCheck = millis();
 
   // NetBIOS: Allows Windows PC to resolve http://mash directly without mDNS
   NBNS.begin("mash");
 
   if (MDNS.begin("mash")) {
+    mdnsStarted = true;
     Serial.println("mDNS responder started: http://mash.local");
     MDNS.addService("http", "tcp", 80);
   } else {
@@ -153,6 +184,52 @@ void loop() {
   server.handleClient();
   otaUpdate();
   calibrationUpdate();
+
+  if (stationModeActive && millis() - lastWifiCheck >= 3000UL) {
+    lastWifiCheck = millis();
+    const bool connected =
+        WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
+
+    if (connected && !wifiWasConnected) {
+      wifiWasConnected = true;
+      Serial.print("WiFi reconnected. Station IP: ");
+      Serial.println(WiFi.localIP());
+      Serial.print("Connected AP BSSID: ");
+      Serial.println(WiFi.BSSIDstr());
+      Serial.print("Default gateway: ");
+      Serial.println(WiFi.gatewayIP());
+      if (!mdnsStarted) {
+        if (MDNS.begin("mash")) {
+          mdnsStarted = true;
+          MDNS.addService("http", "tcp", 80);
+          Serial.println("mDNS responder started: http://mash.local");
+        } else {
+          Serial.println("ERROR: mDNS responder failed to start after WiFi reconnect");
+        }
+      }
+    } else if (!connected && wifiWasConnected) {
+      wifiWasConnected = false;
+      Serial.println("WiFi connection lost; waiting for reconnect");
+    }
+
+    if (!connected && WiFi.getMode() == WIFI_STA &&
+        millis() - stationConnectStarted >= 120000UL) {
+      Serial.println("No external WiFi after 2 minutes; starting local AP while continuing STA retries");
+      WiFi.mode(WIFI_AP_STA);
+      startLocalAccessPoint();
+      if (!mdnsStarted && MDNS.begin("mash")) {
+        mdnsStarted = true;
+        MDNS.addService("http", "tcp", 80);
+        Serial.println("mDNS responder started: http://mash.local");
+      }
+    }
+
+    if (!connected && millis() - lastWifiReconnectAttempt >= 60000UL) {
+      lastWifiReconnectAttempt = millis();
+      Serial.println("WiFi disconnected: attempting reconnect");
+      WiFi.reconnect();
+    }
+  }
 
   // Keep the physical outputs in sync with heaterOn/mixerOn every pass,
   // regardless of which code path last changed them.
