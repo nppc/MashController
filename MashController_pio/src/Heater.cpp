@@ -153,7 +153,7 @@ void updateHeater() {
        (float)s.heaterMinSwitchSec * 1000.0f);
 
   if (!switchLocked) {
-    if (!heaterOn && predictedPeak < effTarget - s.heaterDeadband) {
+    if (!heaterOn && predictedPeak < effTarget - HEATER_DEADBAND_C) {
       heaterOn = true;
       lastSwitchAt = now;
       hasSwitched = true;
@@ -191,15 +191,19 @@ float heaterEstimatedSecondsToTarget()
 
     SettingsEE &s = storage.settings();
 
-    if (!modelReady || isnan(lastWaterNowC))
+    if (!modelReady || isnan(lastWaterNowC) || !waitingForTemp) {
+        etaFiltered = NAN;
+        etaLastUpdateMs = 0;
         return NAN;
+    }
 
     /*
-     * Target already reached.
+     * Target already reached (or within target tolerance band where step timer starts).
      * Clear the stored ETA so that the next heating cycle starts fresh.
      */
     const float effTarget = heaterEffectiveTarget(targetTemperature, s);
-    if (lastWaterNowC >= effTarget) {
+    const float toleranceC = s.targetReachedHystC;
+    if (lastWaterNowC >= effTarget - toleranceC) {
         etaFiltered = NAN;
         etaLastUpdateMs = 0;
         return NAN;
@@ -238,10 +242,14 @@ float heaterEstimatedSecondsToTarget()
 
         simSwitchElapsedMs += dt * 1000.0f;
 
+        float peak = sim.predictPeak(T, capacityJPerC, lossW);
+
         /*
-         * One simulation step has already been performed when i == 0.
+         * Ramp target is reached when the predictive peak reaches effective target
+         * (the heater turns off because stored heat will carry it to the rest temp),
+         * or when actual water temperature enters the step target tolerance band.
          */
-        if (T >= effTarget) {
+        if (peak >= effTarget || T >= effTarget - toleranceC) {
             etaRaw = (float)(i + 1) * dt / simulationScale;
             break;
         }
@@ -249,8 +257,7 @@ float heaterEstimatedSecondsToTarget()
         bool locked = simSwitchElapsedMs < (float)s.heaterMinSwitchSec * 1000.0f;
 
         if (!locked) {
-            float peak = sim.predictPeak(T, capacityJPerC, lossW);
-            if (!on && peak < effTarget - s.heaterDeadband) {
+            if (!on && peak < effTarget - HEATER_DEADBAND_C) {
                 on = true;
                 simSwitchElapsedMs = 0;
             } else if (on && peak >= effTarget) {
