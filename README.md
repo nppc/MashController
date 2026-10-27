@@ -55,9 +55,12 @@ The DS18B20 sensor is factory-calibrated, so the sensor itself is not calibrated
 - Pause, resume and skip controls while a profile is running
 - Audible browser alert when a manual step reaches its temperature
 - Browser-based dashboard for monitoring and configuration
+- Dual Wi-Fi modes: standalone Local Access Point (AP) and External Wi-Fi (Station) with automatic 2-minute AP fallback
+- Local domain resolution via mDNS (`http://mash.local`) and NetBIOS (`http://mash`), configurable in Settings
+- Emergency double-reset recovery to restore default AP credentials without losing settings, profiles, or calibration data
 - Temporary simulated sensor mode and adjustable simulation speed for testing; real heater, mixer and cooler outputs are disabled in this mode
 - Automatic heater calibration (time constant, effective power, store gain, heat loss)
-- OTA (Over-the-Air) update support
+- Over-the-Air (OTA) update support for both firmware and LittleFS filesystem images, with automatic GZIP compression (`.bin.gz`)
 
 ## Screenshots
 
@@ -121,14 +124,53 @@ Q1 inverts the signal, which is why the default drive is active-low. With a sing
 
 > **Warning:** the SSR switches mains voltage. Mount it on a heatsink, use a properly rated and enclosed installation, and never work on the mains wiring while it is connected to power. A flyback diode across the motor and the fan is recommended; it is not drawn in the schematic.
 
+## Network and Wi-Fi
+
+MashController provides two operating modes for Wi-Fi, selectable in Settings:
+
+### 1. Local AP Mode (Default)
+When active, the controller creates its own Wi-Fi Access Point:
+- **Default SSID:** `MashController`
+- **Default IP:** `192.168.4.1` (or `http://mash.local`)
+- **Password:** Optional. Leave empty for an open network, or enter an 8+ character WPA2 password.
+
+### 2. External Wi-Fi Mode (Station)
+Connects to your home Wi-Fi network as a client:
+- Automatically requests an IP address via DHCP (compatible with router DHCP Address Reservations).
+- **Automatic AP Fallback:** If the external network cannot be reached within 2 minutes (e.g. router rebooting, out of range, or wrong password), the controller automatically starts its Local AP so you can still access the interface, while continuing background reconnection retries.
+
+### Emergency AP Recovery (Double-Reset)
+If you ever forget the AP password or lose network access:
+- Power-cycle or press the hardware reset button **twice within 10 seconds**.
+- The controller temporarily resets the AP credentials to default (`MashController`, open network), allowing you to connect and reconfigure. Your mash profiles and calibration parameters are preserved.
+
+### Local Domain Resolution (mDNS & NetBIOS)
+- When enabled (default), you can reach the controller by name without looking up its assigned IP:
+  - **`http://mash.local`** via Multicast DNS (mDNS) on iOS, macOS, Android, Linux, and Windows.
+  - **`http://mash`** on Windows via NetBIOS Name Service (NBNS).
+- **Enable / Disable Toggle:** If you assign a static router DHCP/DNS reservation or prefer IP-only access, toggle **mash.local Domain** off in Settings. This cleanly shuts down both mDNS and NetBIOS responders.
+
+## Over-The-Air (OTA) Updates
+
+Firmware and LittleFS filesystem updates can be uploaded directly over Wi-Fi:
+
+1. Open **`http://<controller-ip>/enable-ota`** in a browser to unlock the 5-minute update window.
+2. Select your file:
+   - **Firmware:** `.pio/build/d1_mini/firmware.bin` or compressed **`firmware.bin.gz`**
+   - **LittleFS Filesystem:** `.pio/build/d1_mini/littlefs.bin` or compressed **`littlefs.bin.gz`**
+3. Click upload. PlatformIO automatically generates both `.bin` and `.bin.gz` files on compile (`pio run` / `pio run --target buildfs`). Uploading `.bin.gz` files reduces transfer size by ~30% for firmware and ~80% for filesystem images; the bootloader decompresses them atomically on restart.
+
 ## Getting Started
 
 1. Clone the repository.
 2. Open the project in [PlatformIO](https://platformio.org/).
-3. Build and upload the firmware to your ESP8266 board.
-4. Upload the filesystem image using PlatformIO ("Build Filesystem Image" and "Upload Filesystem Image").
-5. Connect to the device’s AP and open `http://192.168.4.1` in a browser (the default IP address of the Wemos in AP mode). Configure the wifi password in the settings.
-6. Run Autocalibration for your heater setup.
+3. Build and upload the firmware to your ESP8266 board (`pio run --target upload`).
+4. Build and upload the filesystem image (`pio run --target uploadfs`).
+5. Power up the controller. Connect to the `MashController` Wi-Fi network and open `http://192.168.4.1` (or `http://mash.local`) in your browser.
+6. In **Settings**, configure your network:
+   - Keep **Local AP** mode or switch to **External Wi-Fi** to connect to your home router.
+   - Adjust the **mash.local Domain** toggle if desired.
+7. Run Autocalibration for your heater setup on the Calibration page.
 
 ## License
 
