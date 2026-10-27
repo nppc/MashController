@@ -135,6 +135,13 @@ void setup() {
     WiFi.softAPdisconnect(true);
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
+
+    // Reset station IP info to 0.0.0.0 to wipe any cached IP and force a fresh DHCPDISCOVER
+    struct ip_info zeroIp;
+    zeroIp.ip.addr = 0;
+    zeroIp.gw.addr = 0;
+    zeroIp.netmask.addr = 0;
+    wifi_set_ip_info(STATION_IF, &zeroIp);
     WiFi.config(0u, 0u, 0u);
 
     Serial.print("Connecting to external WiFi: ");
