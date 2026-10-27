@@ -29,19 +29,21 @@ bool mdnsStarted = false;
 void setMdnsEnabled(bool enabled) {
   if (enabled) {
     if (!mdnsStarted) {
+      NBNS.begin("mash");
       if (MDNS.begin("mash")) {
         mdnsStarted = true;
         MDNS.addService("http", "tcp", 80);
-        Serial.println("mDNS responder started: http://mash.local");
+        Serial.println("mDNS and NetBIOS responder started: http://mash.local and http://mash");
       } else {
         Serial.println("ERROR: mDNS responder failed to start");
       }
     }
   } else {
+    NBNS.end();
     if (mdnsStarted) {
       MDNS.end();
       mdnsStarted = false;
-      Serial.println("mDNS responder stopped");
+      Serial.println("mDNS and NetBIOS responders stopped");
     }
   }
 }
@@ -133,6 +135,7 @@ void setup() {
     WiFi.softAPdisconnect(true);
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
+    WiFi.config(0u, 0u, 0u);
 
     Serial.print("Connecting to external WiFi: ");
     Serial.println(s.wifiStaSSID);
@@ -178,13 +181,10 @@ void setup() {
 
   lastWifiCheck = millis();
 
-  // NetBIOS: Allows Windows PC to resolve http://mash directly without mDNS
-  NBNS.begin("mash");
-
   if (s.mdnsEnabled) {
     setMdnsEnabled(true);
   } else {
-    Serial.println("mDNS responder disabled in settings");
+    Serial.println("mDNS and NetBIOS responders disabled in settings");
   }
 
   Serial.println("Registering HTTP handlers...");
