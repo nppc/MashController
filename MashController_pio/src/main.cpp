@@ -26,6 +26,26 @@ bool stationModeActive = false;
 bool wifiWasConnected = false;
 bool mdnsStarted = false;
 
+void setMdnsEnabled(bool enabled) {
+  if (enabled) {
+    if (!mdnsStarted) {
+      if (MDNS.begin("mash")) {
+        mdnsStarted = true;
+        MDNS.addService("http", "tcp", 80);
+        Serial.println("mDNS responder started: http://mash.local");
+      } else {
+        Serial.println("ERROR: mDNS responder failed to start");
+      }
+    }
+  } else {
+    if (mdnsStarted) {
+      MDNS.end();
+      mdnsStarted = false;
+      Serial.println("mDNS responder stopped");
+    }
+  }
+}
+
 static void startLocalAccessPoint() {
   SettingsEE &s = storage.settings();
   const size_t passwordLength = strlen(s.wifiApPass);
@@ -161,12 +181,10 @@ void setup() {
   // NetBIOS: Allows Windows PC to resolve http://mash directly without mDNS
   NBNS.begin("mash");
 
-  if (MDNS.begin("mash")) {
-    mdnsStarted = true;
-    Serial.println("mDNS responder started: http://mash.local");
-    MDNS.addService("http", "tcp", 80);
+  if (s.mdnsEnabled) {
+    setMdnsEnabled(true);
   } else {
-    Serial.println("ERROR: mDNS responder failed to start");
+    Serial.println("mDNS responder disabled in settings");
   }
 
   Serial.println("Registering HTTP handlers...");
@@ -180,7 +198,7 @@ void setup() {
 /* -------------------------------------------------------------------------- */
 
 void loop() {
-  MDNS.update();
+  if (mdnsStarted) MDNS.update();
   server.handleClient();
   otaUpdate();
   calibrationUpdate();
@@ -198,14 +216,8 @@ void loop() {
       Serial.println(WiFi.BSSIDstr());
       Serial.print("Default gateway: ");
       Serial.println(WiFi.gatewayIP());
-      if (!mdnsStarted) {
-        if (MDNS.begin("mash")) {
-          mdnsStarted = true;
-          MDNS.addService("http", "tcp", 80);
-          Serial.println("mDNS responder started: http://mash.local");
-        } else {
-          Serial.println("ERROR: mDNS responder failed to start after WiFi reconnect");
-        }
+      if (storage.settings().mdnsEnabled && !mdnsStarted) {
+        setMdnsEnabled(true);
       }
     } else if (!connected && wifiWasConnected) {
       wifiWasConnected = false;
@@ -217,10 +229,8 @@ void loop() {
       Serial.println("No external WiFi after 2 minutes; starting local AP while continuing STA retries");
       WiFi.mode(WIFI_AP_STA);
       startLocalAccessPoint();
-      if (!mdnsStarted && MDNS.begin("mash")) {
-        mdnsStarted = true;
-        MDNS.addService("http", "tcp", 80);
-        Serial.println("mDNS responder started: http://mash.local");
+      if (storage.settings().mdnsEnabled && !mdnsStarted) {
+        setMdnsEnabled(true);
       }
     }
 

@@ -277,6 +277,7 @@ static void handleGetSettings() {
   doc["coolDownSec"] = s.coolDownSec;
   doc["targetReachedHystC"] = s.targetReachedHystC;
   doc["alertSoundEnabled"] = s.alertSoundEnabled;
+  doc["mdnsEnabled"] = s.mdnsEnabled;
 
   // Sensor source and live DS18B20 information.
   doc["sensorDebugFake"] = sensorUsingFakeMode();
@@ -456,6 +457,10 @@ static void handleSaveSettings() {
   }
   if (doc["alertSoundEnabled"].is<bool>()) {
     s.alertSoundEnabled = doc["alertSoundEnabled"].as<bool>();
+  }
+  if (doc["mdnsEnabled"].is<bool>()) {
+    s.mdnsEnabled = doc["mdnsEnabled"].as<bool>();
+    setMdnsEnabled(s.mdnsEnabled);
   }
 
   if (!storage.save()) {

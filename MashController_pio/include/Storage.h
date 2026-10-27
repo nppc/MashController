@@ -15,8 +15,8 @@
 #define STORAGE_PASS_LEN     64
 
 #define STORAGE_MAGIC        0x4D415348UL  // "MASH" - marks EEPROM as initialized
-#define STORAGE_VERSION      15            // bump if the struct layout changes
-#define STORAGE_PREVIOUS_VERSION 14        // the ONLY older layout migrated (see Storage.cpp);
+#define STORAGE_VERSION      16            // bump if the struct layout changes
+#define STORAGE_PREVIOUS_VERSION 15        // the ONLY older layout migrated (see Storage.cpp);
                                            // bumping STORAGE_VERSION without updating this
                                            // and the Legacy struct breaks the build on purpose
 
@@ -77,6 +77,7 @@ struct SettingsEE {
   uint16_t coolDownSec;          // seconds mixer runs after profile completes
   float    targetReachedHystC;   // a step counts as reached at target minus this many degrees C
   bool     alertSoundEnabled;    // browser plays the alert chime when a manual Pause step is ready
+  bool     mdnsEnabled;          // true = start mDNS responder (http://mash.local)
 };
 
 struct EepromDataEE {

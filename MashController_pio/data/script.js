@@ -1210,6 +1210,8 @@ async function loadSettings() {
 
 		document.getElementById('setAlertSound').checked =
 			settings.alertSoundEnabled ?? true;
+		document.getElementById('setMdnsEnabled').checked =
+			settings.mdnsEnabled ?? true;
 		document.getElementById('setSensorDebugFake').checked =
 		    !!settings.sensorDebugFake;
         updateSensorDebugSpeedVisibility(!!settings.sensorDebugFake);
@@ -1373,6 +1375,7 @@ async function saveSettings() {
 			),
 
 			alertSoundEnabled: document.getElementById('setAlertSound').checked,
+			mdnsEnabled: document.getElementById('setMdnsEnabled').checked,
 			sensorDebugFake: document.getElementById('setSensorDebugFake').checked,
 			sensorDebugSpeed: parseFloat(
                 document.getElementById('setSensorDebugSpeed').value

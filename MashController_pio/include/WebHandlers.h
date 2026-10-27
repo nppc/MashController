@@ -14,4 +14,7 @@ void webHandlersInit();
 // Services the OTA handler only while the explicitly armed window is active.
 void otaUpdate();
 
+// Enable or disable mDNS responder at runtime (http://mash.local)
+void setMdnsEnabled(bool enabled);
+
 #endif
