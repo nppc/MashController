@@ -24,7 +24,7 @@
           <div class="ota-countdown" id="otaCountdown">05:00</div>
         </div>
         <p class="setting-desc">
-          Select a PlatformIO firmware or LittleFS image below. The controller will restart automatically after a successful upload.
+          Select a PlatformIO firmware (.bin / .bin.gz) or LittleFS image (.bin / .bin.gz) below. The controller will decompress and restart automatically after a successful upload.
         </p>
 
         <div class="ota-progress-panel" id="otaProgressPanel" hidden>
@@ -38,17 +38,17 @@
           <div class="ota-progress-detail" id="otaProgressDetail"></div>
         </div>
 
-        <form class="ota-form" action="/update" method="post" enctype="multipart/form-data" data-update-form>
-          <div class="label-small">Firmware image</div>
-          <input class="input-dark" type="file" name="update" accept=".bin" required>
+        <form class="ota-form" action="/update?type=firmware" method="post" enctype="multipart/form-data" data-update-form>
           <input type="hidden" name="type" value="firmware">
+          <div class="label-small">Firmware image (.bin or .bin.gz)</div>
+          <input class="input-dark" type="file" name="update" accept=".bin,.bin.gz,.gz" required>
           <button class="btn green" type="submit">Upload firmware</button>
         </form>
 
-        <form class="ota-form" action="/update" method="post" enctype="multipart/form-data" data-update-form>
-          <div class="label-small">LittleFS image</div>
-          <input class="input-dark" type="file" name="update" accept=".bin" required>
+        <form class="ota-form" action="/update?type=filesystem" method="post" enctype="multipart/form-data" data-update-form>
           <input type="hidden" name="type" value="filesystem">
+          <div class="label-small">LittleFS image (.bin or .bin.gz)</div>
+          <input class="input-dark" type="file" name="update" accept=".bin,.bin.gz,.gz" required>
           <button class="btn green" type="submit">Upload LittleFS</button>
         </form>
       </section>

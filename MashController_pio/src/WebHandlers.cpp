@@ -6,6 +6,7 @@
 #include <ArduinoOTA.h>
 #include <Updater.h>
 #include <Ticker.h>
+#include <flash_hal.h>
 
 #include "Storage.h"
 #include "Sensor.h"
@@ -38,12 +39,18 @@ bool updateReceived = false;
 bool isFilesystemImage(const String &filename) {
   String lowerName = filename;
   lowerName.toLowerCase();
-  return lowerName.indexOf("littlefs") >= 0 || lowerName.indexOf("filesystem") >= 0;
+  return lowerName.indexOf("littlefs") >= 0 ||
+         lowerName.indexOf("filesystem") >= 0 ||
+         lowerName.indexOf("spiffs") >= 0 ||
+         (lowerName.indexOf("fs") >= 0 && (lowerName.endsWith(".bin") || lowerName.endsWith(".gz")));
 }
 
 size_t filesystemSize() {
   FSInfo info;
-  return LittleFS.info(info) ? info.totalBytes : 0;
+  if (LittleFS.info(info) && info.totalBytes > 0 && info.totalBytes <= (size_t)FS_PHYS_SIZE) {
+    return info.totalBytes;
+  }
+  return (size_t)FS_PHYS_SIZE;
 }
 }
 
@@ -699,7 +706,7 @@ static void handleUpdateUpload() {
     updateFailed = false;
     updateReceived = false;
 
-    const bool filesystem = server.arg("type") == "filesystem" ||
+    const bool filesystem = server.arg("type") == "filesystem" || server.hasArg("filesystem") ||
                 isFilesystemImage(upload.filename);
     const int command = filesystem ? U_FS : U_FLASH;
     const size_t maxUpdateSize = filesystem
