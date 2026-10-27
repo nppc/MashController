@@ -390,12 +390,12 @@
 			  </div>
 			</div>
 			<label class="switch">
-			  <input id="setSensorDebugFake" type="checkbox">
+			  <input id="setSensorDebugFake" type="checkbox" onchange="updateSensorDebugSpeedVisibility(this.checked)">
 			  <span class="switch-track"></span>
 			</label>
 		  </div>
 
-		  <div class="setting-row">
+		  <div class="setting-row hidden" id="sensorDebugSpeedRow">
 			<div>
 			  <div class="setting-title">Simulation Speed</div>
 			  <div class="setting-desc">

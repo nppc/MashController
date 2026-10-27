@@ -1089,6 +1089,11 @@ let wifiSettings = {
     sta: { ssid: '', pass: '', passSet: false }
 };
 
+function updateSensorDebugSpeedVisibility(enabled) {
+    document.getElementById('sensorDebugSpeedRow')
+        .classList.toggle('hidden', !enabled);
+}
+
 function toggleWifiMode() {
     setWifiMode(currentWifiMode === 0 ? 1 : 0);
 }
@@ -1207,6 +1212,7 @@ async function loadSettings() {
 			settings.alertSoundEnabled ?? true;
 		document.getElementById('setSensorDebugFake').checked =
 		    !!settings.sensorDebugFake;
+        updateSensorDebugSpeedVisibility(!!settings.sensorDebugFake);
 		document.getElementById('setSensorDebugSpeed').value =
 		    settings.sensorDebugSpeed ?? 2;
 
