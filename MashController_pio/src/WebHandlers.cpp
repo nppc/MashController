@@ -751,7 +751,7 @@ static void handleUpdateResult() {
 }
 
 static void handleStatus() {
-  StaticJsonDocument<640> doc;
+  StaticJsonDocument<1024> doc;
 
   doc["running"] = isRunning;
   doc["sensorDebugFake"] = sensorUsingFakeMode();
@@ -763,6 +763,14 @@ static void handleStatus() {
   doc["waterMassKg"] = activeProfile.waterMassKg;
   doc["grainMassKg"] = activeProfile.grainMassKg;
   doc["step"] = currentStep;
+  if (isRunning) {
+    JsonArray steps = doc.createNestedArray("steps");
+    for (int i = 0; i < activeProfile.stepCount; i++) {
+      JsonObject step = steps.createNestedObject();
+      step["temp"] = round1(activeProfile.steps[i].temp);
+      step["time"] = activeProfile.steps[i].time;
+    }
+  }
   doc["stepTemp"] = round1(targetTemperature);
   doc["currentTemp"] = sensorFound && sensorOk ? round1(readTemperature()) : -127;
   doc["heaterOn"] = heaterOutputActive();

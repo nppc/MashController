@@ -278,11 +278,7 @@ async function updateStatus() {
         ? Number(st.stepTemp).toFixed(1)
         : '--.-';
         
-    if (st.running && st.profileName) {
-      document.getElementById('activeProfileName').textContent =
-        st.profileName;
-    }
-
+    updateMainScreenProfileName();
     updateMainScreenProfileDetails(st);
 
     renderMainSteps();
@@ -729,7 +725,9 @@ function updateProfileNameField() {
 /* Show profile name on main screen */
 function updateMainScreenProfileName() {
   const el = document.getElementById('activeProfileName');
-  if (profiles[currentProfileIndex]) {
+  if (controllerStatus.running && controllerStatus.profileName) {
+    el.textContent = controllerStatus.profileName;
+  } else if (profiles[currentProfileIndex]) {
     el.textContent = profiles[currentProfileIndex].name;
   } else {
     el.textContent = '--';
@@ -738,11 +736,16 @@ function updateMainScreenProfileName() {
 
 function updateMainScreenProfileDetails(status) {
   const detailsEl = document.getElementById('activeProfileDetails');
-  const profile = profiles[currentProfileIndex];
   if (!detailsEl) return;
 
-  const waterMass = profile?.waterMassKg ?? status?.waterMassKg;
-  const grainMass = profile?.grainMassKg ?? status?.grainMassKg;
+  const mashStatus = status || controllerStatus;
+  const profile = mashStatus.running ? null : profiles[currentProfileIndex];
+  const waterMass = mashStatus.running
+    ? mashStatus.waterMassKg
+    : profile?.waterMassKg;
+  const grainMass = mashStatus.running
+    ? mashStatus.grainMassKg
+    : profile?.grainMassKg;
   const w = waterMass !== undefined ? Number(waterMass).toFixed(1) : '--';
   const g = grainMass !== undefined ? Number(grainMass).toFixed(1) : '--';
   detailsEl.textContent = `Water: ${w} l | Grain: ${g} kg`;
@@ -822,10 +825,12 @@ function renderMainSteps() {
   const cont = document.getElementById('mainStepsContainer');
   cont.innerHTML = '';
 
-  const profile = profiles[currentProfileIndex];
-  if (!profile) return;
+  const steps = controllerStatus.running && Array.isArray(controllerStatus.steps)
+    ? controllerStatus.steps
+    : profiles[currentProfileIndex]?.steps;
+  if (!steps) return;
 
-  profile.steps.forEach((step, idx) => {
+  steps.forEach((step, idx) => {
 
     const active =
       controllerStatus.running &&
