@@ -167,7 +167,24 @@ void sensorPrepareFakeMash(float waterLiters, float initialTemperature) {
 }
 
 void sensorAddFakeGrain(float grainMassKg) {
-  fakeGrainMassKg += max(grainMassKg, 0.0f);
+  const float addedGrainKg = max(grainMassKg, 0.0f);
+  if (!(addedGrainKg > 0.0f)) return;
+
+  constexpr float WATER_SPECIFIC_HEAT = 4186.0f;
+  constexpr float GRAIN_SPECIFIC_HEAT = 1900.0f;
+  const float waterCapacity =
+      fakeWaterLiters * WATER_SPECIFIC_HEAT +
+      fakeGrainMassKg * GRAIN_SPECIFIC_HEAT;
+  const float addedGrainCapacity = addedGrainKg * GRAIN_SPECIFIC_HEAT;
+  const float grainTemperatureC = isfinite(fakeAmbientOverrideC)
+      ? fakeAmbientOverrideC
+      : storage.settings().heaterAmbientC;
+
+  fakeWaterTemp =
+      (fakeWaterTemp * waterCapacity +
+       grainTemperatureC * addedGrainCapacity) /
+      (waterCapacity + addedGrainCapacity);
+  fakeGrainMassKg += addedGrainKg;
 }
 
 void sensorEndFakeCalibration() {
