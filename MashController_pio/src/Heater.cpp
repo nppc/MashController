@@ -104,6 +104,23 @@ void heaterIncludeGrain(float grainMassKg) {
   capacityJPerC += max(grainMassKg, 0.0f) * GRAIN_SPECIFIC_HEAT;
 }
 
+void heaterRebaseAfterGrainAddition() {
+  const unsigned long now = millis();
+  if (modelReady) {
+    const float elapsedWallSec = (float)(now - previousUpdateAt) / 1000.0f;
+    const float dtSec =
+        min(elapsedWallSec * sensorSimulationTimeScale(), 10.0f);
+    model.update(dtSec, outputWasOn);
+  }
+
+  heaterOn = false;
+  outputWasOn = false;
+  previousUpdateAt = now;
+  hasSwitched = false;
+  predictedPeak = NAN;
+  lastWaterNowC = NAN;
+}
+
 float heaterPredictedPeak() {
   return predictedPeak;
 }
@@ -122,6 +139,14 @@ void updateHeater() {
 
   if (!modelReady) {
     heaterResetThermalModel(readTemperature(), activeProfile.waterMassKg);
+  }
+
+  if (!sensorHasFreshTemperature()) {
+    heaterOn = false;
+    outputWasOn = false;
+    previousUpdateAt = now;
+    predictedPeak = NAN;
+    return;
   }
 
   const float windowSec = averageWindowSec(s);
@@ -144,6 +169,12 @@ void updateHeater() {
   const float waterNowC = averageC + rateCPerSec * windowSec * 0.5f;
   predictedPeak = model.predictPeak(waterNowC, capacityJPerC, lossW);
   lastWaterNowC = waterNowC;
+
+  if (residualHeatRecoveryActive) {
+    heaterOn = false;
+    outputWasOn = heaterOutputActive();
+    return;
+  }
 
   const float effTarget = heaterEffectiveTarget(targetTemperature, s);
 

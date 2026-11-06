@@ -9,6 +9,7 @@ extern bool heaterOn;
 
 void heaterResetThermalModel(float initialTemperature, float waterMassKg);
 void heaterIncludeGrain(float grainMassKg);
+void heaterRebaseAfterGrainAddition();
 
 // Call on every new sensor reading.
 void updateHeater();

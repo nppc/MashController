@@ -340,19 +340,23 @@ function updateProcessUI(st) {
   const isPaused = st.paused ?? false;             
   const isRunning = st.running ?? false;           
   const inCoolDown = st.coolDownActive ?? false;   
+  const residualHeatRecovery = st.residualHeatRecovery ?? false;
   const calibrationActive = st.calibrationActive ?? false;
   const waitingForUser = st.waitingForUser ?? false;
   const waitingForTemperature = st.waiting ?? false;
   const instruction = document.getElementById('pauseInstruction');
   const resumeButton = document.getElementById('btnResume');
 
-  badge.classList.remove('running', 'paused', 'cooldown');
+  badge.classList.remove('running', 'paused', 'cooldown', 'recovery');
 	if (inCoolDown) {
 		badge.textContent = 'Cooling Down';
 		badge.classList.add('cooldown');
 	} else if (isRunning && isPaused) {
 		badge.textContent = 'Paused';
 		badge.classList.add('paused');
+	} else if (isRunning && residualHeatRecovery) {
+		badge.textContent = 'Recovering';
+		badge.classList.add('recovery');
 	} else if (isRunning) {
 		badge.textContent = 'Running';
 		badge.classList.add('running');
@@ -364,13 +368,17 @@ function updateProcessUI(st) {
 	timerEl.textContent = formatTime(inCoolDown ? (st.coolDownRemaining ?? 0) : (st.remaining ?? 0));
 	timerEl.classList.toggle('inactive', !isRunning && !inCoolDown);
   if (instruction) {
-    const showPauseMessage = isRunning && (isPaused || waitingForUser);
+    const showPauseMessage = isRunning &&
+      (isPaused || waitingForUser || residualHeatRecovery);
     instruction.classList.toggle('hidden', !showPauseMessage);
     instruction.classList.toggle('manual-step', waitingForUser);
     instruction.classList.toggle('temperature-wait', isPaused && waitingForTemperature);
     instruction.classList.toggle('timer-paused', isPaused && !waitingForTemperature && !waitingForUser);
+    instruction.classList.toggle('recovery', residualHeatRecovery);
 
-    if (waitingForUser) {
+    if (residualHeatRecovery) {
+      instruction.textContent = 'Residual-heat recovery: heater is paused while the mash temperature stabilizes. Mixer is circulating.';
+    } else if (waitingForUser) {
       instruction.textContent = 'Manual step. Press RESUME to continue.';
     } else if (isPaused && waitingForTemperature) {
       instruction.textContent = 'Heating paused. Press RESUME to continue.';

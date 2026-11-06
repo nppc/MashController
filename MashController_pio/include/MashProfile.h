@@ -33,9 +33,11 @@ extern unsigned long pausedElapsedSec;   // elapsed time banked when paused
 
 extern bool inCoolDown;                  // Cool-down phase active
 extern unsigned long coolDownStart;      // When cool-down began
+extern bool residualHeatRecoveryActive;
 
 bool loadProfile(int index);
 void advanceStep();
+void mashProfileStartResidualHeatRecovery();
 
 // Cool-down countdown - call every loop() iteration (independent of
 // READ_INTERVAL_MS) so STOP stays responsive and timing stays precise.

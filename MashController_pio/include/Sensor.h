@@ -18,6 +18,8 @@ extern bool conversionInProgress;   // exposed so /rediscoverSensor can check it
 extern int16_t tempHistory[HISTORY_SIZE];  // holds the last HISTORY_SIZE readings, in t/100 C units
 extern int histIndex;
 
+bool sensorHasFreshTemperature();
+void sensorResetControlTemperatureHistory();
 void sensorInit();     // call once from setup(), after Serial.begin()
 void sensorUpdate();   // call every loop() iteration (real sensor); call
                         // at the speed-adjusted interval in simulated mode

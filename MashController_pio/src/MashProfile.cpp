@@ -3,6 +3,7 @@
 #include "Sensor.h"
 #include "Heater.h"
 #include "Mixer.h"
+#include "Config.h"
 
 Profile activeProfile;
 
@@ -20,10 +21,13 @@ unsigned long pausedElapsedSec = 0;
 
 bool inCoolDown = false;
 unsigned long coolDownStart = 0;
+bool residualHeatRecoveryActive = false;
 
 namespace {
 float estimatedSecondsRemaining = NAN;
 unsigned long estimateUpdatedAt = 0;
+unsigned long residualHeatRecoveryWindowStartedAt = 0;
+float residualHeatRecoveryWindowStartC = NAN;
 
 float estimateRampSeconds(float fromC, float toC, float capacityJPerC) {
   if (!isfinite(fromC) || !isfinite(toC) ||
@@ -169,6 +173,7 @@ void advanceStep() {
     waitingForUser = false;
     waitingForTemp = false;
     isPaused = false;
+    residualHeatRecoveryActive = false;
     stepDurationSec = 0;
     pausedElapsedSec = 0;
 
@@ -190,6 +195,25 @@ void advanceStep() {
     pausedElapsedSec = 0;
     refreshEstimatedTime();
   }
+}
+
+void mashProfileStartResidualHeatRecovery() {
+  residualHeatRecoveryActive = false;
+  if (!sensorFound || !sensorOk || !sensorHasFreshTemperature()) return;
+
+  const float currentTemp = readTemperature();
+  if (!isfinite(currentTemp) ||
+      currentTemp <= RESIDUAL_HEAT_RECOVERY_THRESHOLD_C) {
+    return;
+  }
+
+  residualHeatRecoveryActive = true;
+  residualHeatRecoveryWindowStartedAt = millis();
+  residualHeatRecoveryWindowStartC = currentTemp;
+  mixerManualMode = false;
+  mixerOn = true;
+  mixerPhaseStart = millis();
+  Serial.println("Residual-heat recovery started; heater held off while temperature stabilizes");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -216,7 +240,26 @@ void mashProfileTick() {
   updateEstimatedTime();
   if (!(isRunning && !isPaused && !inCoolDown)) return;
 
+  if (!sensorHasFreshTemperature()) return;
+
   float currentTemp = readTemperature();   // cached value - never blocks
+
+  if (residualHeatRecoveryActive) {
+    const unsigned long now = millis();
+    if (now - residualHeatRecoveryWindowStartedAt >=
+        RESIDUAL_HEAT_RECOVERY_WINDOW_MS) {
+      if (currentTemp <= residualHeatRecoveryWindowStartC +
+                             RESIDUAL_HEAT_RECOVERY_MAX_RISE_C) {
+        residualHeatRecoveryActive = false;
+        Serial.println("Residual-heat recovery complete; normal temperature control resumed");
+        refreshEstimatedTime();
+      } else {
+        residualHeatRecoveryWindowStartedAt = now;
+        residualHeatRecoveryWindowStartC = currentTemp;
+      }
+    }
+    return;
+  }
 
   // If waiting for temperature -> check if we reached it
   if (waitingForTemp) {

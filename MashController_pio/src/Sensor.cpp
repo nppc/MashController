@@ -13,6 +13,8 @@ constexpr float DEFAULT_FAKE_TEMP_SPEED_MULTIPLIER = 2.0f;
 constexpr float FAKE_TEMP_WATER_LITERS = 10.0f;
 
 bool fakeMode = false;
+bool freshTemperatureAvailable = false;
+bool discardNextTemperatureConversion = false;
 float fakeSpeedMultiplier = DEFAULT_FAKE_TEMP_SPEED_MULTIPLIER;
 unsigned long conversionStartTime = 0;
 unsigned long nextConversionAllowedAt = 0;
@@ -44,12 +46,30 @@ bool conversionInProgress = false;
 
 int16_t tempHistory[HISTORY_SIZE];
 int histIndex = 0;
+namespace {
+int16_t controlTempHistory[HISTORY_SIZE];
+int controlHistIndex = 0;
+}
 
 constexpr uint8_t TEMPERATURE_AVERAGE_SAMPLES = 5;
 
 static void addTemp(float t) {
-  tempHistory[histIndex % HISTORY_SIZE] = (int16_t)lroundf(t * 100.0f);
+  const int16_t value = (int16_t)lroundf(t * 100.0f);
+  tempHistory[histIndex % HISTORY_SIZE] = value;
   histIndex++;
+  controlTempHistory[controlHistIndex % HISTORY_SIZE] = value;
+  controlHistIndex++;
+  freshTemperatureAvailable = true;
+}
+
+bool sensorHasFreshTemperature() {
+  return freshTemperatureAvailable;
+}
+
+void sensorResetControlTemperatureHistory() {
+  controlHistIndex = 0;
+  freshTemperatureAvailable = false;
+  discardNextTemperatureConversion = !fakeMode && conversionInProgress;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -105,13 +125,13 @@ String sensorAddressToString() {
 // Shared filtered reading for the heater, mash control, calibration, and UI.
 // The raw latest value remains available as lastGoodTemp.
 float readTemperature() {
-  const int available = min(histIndex, (int)TEMPERATURE_AVERAGE_SAMPLES);
+  const int available = min(controlHistIndex, (int)TEMPERATURE_AVERAGE_SAMPLES);
   if (available <= 0) return lastGoodTemp;
 
   int32_t total = 0;   // sum of centi-C; int32_t so it can't overflow across HISTORY_SIZE samples
-  const int first = histIndex - available;
+  const int first = controlHistIndex - available;
   for (int i = 0; i < available; i++) {
-    total += tempHistory[(first + i) % HISTORY_SIZE];
+    total += controlTempHistory[(first + i) % HISTORY_SIZE];
   }
   return (total / 100.0f) / available;
 }
@@ -119,13 +139,13 @@ float readTemperature() {
 float averageTemperature(float windowSec) {
   int count = (int)lroundf(windowSec * 1000.0f / (float)READ_INTERVAL_MS);
   count = constrain(count, 1, HISTORY_SIZE);
-  const int available = min(histIndex, count);
+  const int available = min(controlHistIndex, count);
   if (available <= 0) return lastGoodTemp;
 
   int32_t total = 0;   // sum of centi-C; int32_t so it can't overflow across HISTORY_SIZE samples
-  const int first = histIndex - available;
+  const int first = controlHistIndex - available;
   for (int i = 0; i < available; i++) {
-    total += tempHistory[(first + i) % HISTORY_SIZE];
+    total += controlTempHistory[(first + i) % HISTORY_SIZE];
   }
   return (total / 100.0f) / available;
 }
@@ -226,6 +246,7 @@ bool sensorSetFakeMode(bool enabled) {
     sensorOk = true;
     lastGoodTemp = initialTemperature;
     histIndex = 0;
+    sensorResetControlTemperatureHistory();
     addTemp(initialTemperature);
     Serial.println("Temperature source switched to simulation");
   } else {
@@ -234,6 +255,7 @@ bool sensorSetFakeMode(bool enabled) {
     sensorOk = sensorFound;
     if (sensorFound) sensors.setResolution(sensorAddr, 12);
     histIndex = 0;
+    sensorResetControlTemperatureHistory();
     lastGoodTemp = NAN;
     Serial.println(sensorFound
                        ? "Temperature source switched to DS18B20"
@@ -319,6 +341,8 @@ void sensorUpdate() {
 
   if (now - conversionStartTime >= CONVERSION_TIME_MS) {
     float t = sensors.getTempC(sensorAddr);
+    const bool discardReading = discardNextTemperatureConversion;
+    discardNextTemperatureConversion = false;
 
     if (t == DEVICE_DISCONNECTED_C) {
       sensorOk = false;
@@ -326,7 +350,7 @@ void sensorUpdate() {
       calibrationStop();
       Serial.println("DS18B20 read error");
       // keep lastGoodTemp as-is; don't feed a garbage value to updateHeater()
-    } else {
+    } else if (!discardReading) {
       sensorOk = true;
       lastGoodTemp = t;
       addTemp(lastGoodTemp);

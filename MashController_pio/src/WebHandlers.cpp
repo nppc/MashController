@@ -576,6 +576,7 @@ static void handleStartProfile() {
   mixerManualMode = false;
   mixerOn = false;
   mixerPhaseStart = millis();
+  mashProfileStartResidualHeatRecovery();
 
   server.send(200, "text/plain", "Started");
 }
@@ -585,6 +586,7 @@ static void handleStopProfile() {
   isPaused = false;
   waitingForUser = false;
   waitingForTemp = false;
+  residualHeatRecoveryActive = false;
   targetTemperature = NAN;
   heaterOn = false;
   mashProfileResetEstimatedTime();
@@ -629,6 +631,8 @@ static void handleResumeProfile() {
         if (sensorUsingFakeMode()) {
           sensorAddFakeGrain(activeProfile.grainMassKg);
         }
+        sensorResetControlTemperatureHistory();
+        heaterRebaseAfterGrainAddition();
       }
       waitingForUser = false;
       isPaused = false;
@@ -758,6 +762,7 @@ static void handleStatus() {
   doc["calibrationActive"] = calibrationIsActive();
   doc["paused"] = isPaused;
   doc["waitingForUser"] = waitingForUser;
+  doc["residualHeatRecovery"] = residualHeatRecoveryActive;
   doc["alertSound"] = storage.settings().alertSoundEnabled;
   doc["profileName"] = activeProfile.name;
   doc["waterMassKg"] = activeProfile.waterMassKg;

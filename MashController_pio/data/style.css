@@ -448,6 +448,11 @@
   color: #e8c547;
 }
 
+.state-badge.recovery {
+  background: #35456a;
+  color: #7fbfff;
+}
+
 .pause-instruction {
   display: flex;
   align-items: center;
@@ -478,6 +483,13 @@
   border-left-color: #e8c547;
   background: rgba(232, 197, 71, 0.08);
   color: #f3d96d;
+}
+
+.pause-instruction.recovery {
+  border-color: rgba(127, 191, 255, 0.28);
+  border-left-color: #7fbfff;
+  background: rgba(127, 191, 255, 0.08);
+  color: #b7d9ff;
 }
 
 .remaining-time {
