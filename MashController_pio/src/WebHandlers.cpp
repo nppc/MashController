@@ -228,7 +228,7 @@ static void handleCalibrationStatus() {
 
 static void handleGetSettings() {
   SettingsEE &s = storage.settings();
-  StaticJsonDocument<768> doc;
+  StaticJsonDocument<896> doc;
 
   doc["wifiMode"] = s.wifiMode;
   doc["wifiApSSID"] = s.wifiApSSID;
@@ -281,6 +281,7 @@ static void handleGetSettings() {
   doc["heaterLossScalePct"] = s.heaterLossScalePct;
   doc["mixerOnSec"] = s.mixerOnSec;
   doc["mixerRestSec"] = s.mixerRestSec;
+  doc["mixerFollowHeater"] = s.mixerFollowHeater;
   doc["coolDownSec"] = s.coolDownSec;
   doc["targetReachedHystC"] = s.targetReachedHystC;
   doc["alertSoundEnabled"] = s.alertSoundEnabled;
@@ -453,6 +454,9 @@ static void handleSaveSettings() {
   }
   if (doc.containsKey("mixerRestSec")) {
     s.mixerRestSec = doc["mixerRestSec"].as<uint8_t>();
+  }
+  if (doc["mixerFollowHeater"].is<bool>()) {
+    s.mixerFollowHeater = doc["mixerFollowHeater"].as<bool>();
   }
 
   if (doc.containsKey("coolDownSec")) {
@@ -785,6 +789,7 @@ static void handleStatus() {
 
   doc["mixerOn"] = mixerOn;
   doc["mixerMode"] = mixerManualMode ? "manual" : "auto";
+  doc["mixerHeating"] = mixerFollowingHeater;
   doc["mixerRemaining"] = mixerManualMode ? 0 : mixerRemainingSec();
 
   if (isRunning) {

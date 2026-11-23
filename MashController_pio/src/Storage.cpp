@@ -51,7 +51,7 @@
  *      loadDefaults() call these helpers first, so a field defaulted there
  *      never ends up as 0 after a memset().
  *   3. If this changes the struct's layout/size, bump STORAGE_VERSION.
- *      The static_assert next to LegacyV12SettingsEE will fail the build
+ *      The static_assert next to LegacyV<old>SettingsEE will fail the build
  *      until you:
  *        (a) copy the OLD SettingsEE into a new LegacyV<old>SettingsEE /
  *            LegacyV<old>EepromDataEE pair,
@@ -73,8 +73,8 @@ Storage storage;
 namespace {
 
 // ---- Previous layout (version STORAGE_PREVIOUS_VERSION) -------------------
-// Layout of version 15 (before mdnsEnabled was added).
-struct LegacyV15SettingsEE {
+// Layout of version 16 (before mixerFollowHeater was added).
+struct LegacyV16SettingsEE {
   uint8_t  wifiMode;
   char     wifiApSSID[STORAGE_SSID_LEN];
   char     wifiApPass[STORAGE_PASS_LEN];
@@ -104,12 +104,13 @@ struct LegacyV15SettingsEE {
   uint16_t coolDownSec;
   float    targetReachedHystC;
   bool     alertSoundEnabled;
+  bool     mdnsEnabled;
 };
 
-struct LegacyV15EepromDataEE {
+struct LegacyV16EepromDataEE {
   uint32_t             magic;
   uint16_t             version;
-  LegacyV15SettingsEE  settings;
+  LegacyV16SettingsEE  settings;
   uint8_t              profileCount;
   ProfileEE            profiles[STORAGE_MAX_PROFILES];
   uint32_t             crc;
@@ -121,8 +122,8 @@ static_assert(STORAGE_VERSION == STORAGE_PREVIOUS_VERSION + 1,
               "STORAGE_VERSION was bumped: snapshot the old SettingsEE as "
               "LegacyV<old>SettingsEE, update STORAGE_PREVIOUS_VERSION, "
               "migrate it in begin(), and delete the older Legacy struct.");
-static_assert(STORAGE_PREVIOUS_VERSION == 15,
-              "STORAGE_PREVIOUS_VERSION no longer matches LegacyV15* - "
+static_assert(STORAGE_PREVIOUS_VERSION == 16,
+              "STORAGE_PREVIOUS_VERSION no longer matches LegacyV16* - "
               "rename/replace the Legacy struct and migration block.");
 
 // Uncalibrated starting point for a 2 kW under-base element; run the
@@ -161,6 +162,7 @@ void applyMixerDefaults(SettingsEE &s) {
   s.mixerRestSec = 15;
   s.mixerOnSec   = 5;
   s.coolDownSec  = 180;   // 3 minutes default
+  s.mixerFollowHeater = false;
 }
 }
 
@@ -172,15 +174,15 @@ bool Storage::begin() {
   uint32_t calc = crc32((uint8_t*)&_data, sizeof(EepromDataEE) - sizeof(_data.crc));
 
   if (_data.magic != STORAGE_MAGIC || _data.version != STORAGE_VERSION || storedCrc != calc) {
-    LegacyV15EepromDataEE legacyV15;
-    EEPROM.get(0, legacyV15);
-    uint32_t legacyV15Calc = crc32(
-        (uint8_t*)&legacyV15,
-        sizeof(LegacyV15EepromDataEE) - sizeof(legacyV15.crc));
+    LegacyV16EepromDataEE legacyV16;
+    EEPROM.get(0, legacyV16);
+    uint32_t legacyV16Calc = crc32(
+        (uint8_t*)&legacyV16,
+        sizeof(LegacyV16EepromDataEE) - sizeof(legacyV16.crc));
 
-    if (legacyV15.magic == STORAGE_MAGIC &&
-        legacyV15.version == STORAGE_PREVIOUS_VERSION &&
-        legacyV15.crc == legacyV15Calc) {
+    if (legacyV16.magic == STORAGE_MAGIC &&
+        legacyV16.version == STORAGE_PREVIOUS_VERSION &&
+        legacyV16.crc == legacyV16Calc) {
       memset(&_data, 0, sizeof(_data));
       _data.magic = STORAGE_MAGIC;
       _data.version = STORAGE_VERSION;
@@ -188,43 +190,43 @@ bool Storage::begin() {
       applyHeaterDefaults(_data.settings);
       applyMixerDefaults(_data.settings);
 
-      _data.settings.wifiMode = legacyV15.settings.wifiMode;
-      memcpy(_data.settings.wifiApSSID, legacyV15.settings.wifiApSSID, STORAGE_SSID_LEN);
-      memcpy(_data.settings.wifiApPass, legacyV15.settings.wifiApPass, STORAGE_PASS_LEN);
-      memcpy(_data.settings.wifiStaSSID, legacyV15.settings.wifiStaSSID, STORAGE_SSID_LEN);
-      memcpy(_data.settings.wifiStaPass, legacyV15.settings.wifiStaPass, STORAGE_PASS_LEN);
+      _data.settings.wifiMode = legacyV16.settings.wifiMode;
+      memcpy(_data.settings.wifiApSSID, legacyV16.settings.wifiApSSID, STORAGE_SSID_LEN);
+      memcpy(_data.settings.wifiApPass, legacyV16.settings.wifiApPass, STORAGE_PASS_LEN);
+      memcpy(_data.settings.wifiStaSSID, legacyV16.settings.wifiStaSSID, STORAGE_SSID_LEN);
+      memcpy(_data.settings.wifiStaPass, legacyV16.settings.wifiStaPass, STORAGE_PASS_LEN);
 
-      _data.settings.heaterPowerW = legacyV15.settings.heaterPowerW;
-      _data.settings.heaterPowerEffW = legacyV15.settings.heaterPowerEffW;
-      _data.settings.heaterTauSec = legacyV15.settings.heaterTauSec;
-      _data.settings.heaterStoreGain = legacyV15.settings.heaterStoreGain;
-      _data.settings.heaterLossWPerC = legacyV15.settings.heaterLossWPerC;
-      _data.settings.heaterAmbientC = legacyV15.settings.heaterAmbientC;
-      _data.settings.heaterDeadband = legacyV15.settings.heaterDeadband;
-      _data.settings.heaterMinSwitchSec = legacyV15.settings.heaterMinSwitchSec;
-      _data.settings.heaterT1 = legacyV15.settings.heaterT1;
-      _data.settings.heaterTau1 = legacyV15.settings.heaterTau1;
-      _data.settings.heaterLossW1 = legacyV15.settings.heaterLossW1;
-      _data.settings.heaterStoreGain1 = legacyV15.settings.heaterStoreGain1;
-      _data.settings.heaterT2 = legacyV15.settings.heaterT2;
-      _data.settings.heaterTau2 = legacyV15.settings.heaterTau2;
-      _data.settings.heaterLossW2 = legacyV15.settings.heaterLossW2;
-      _data.settings.heaterStoreGain2 = legacyV15.settings.heaterStoreGain2;
-      _data.settings.heaterTrimLowC = legacyV15.settings.heaterTrimLowC;
-      _data.settings.heaterTrimHighC = legacyV15.settings.heaterTrimHighC;
-      _data.settings.heaterLossScalePct = legacyV15.settings.heaterLossScalePct;
-      _data.settings.mixerRestSec = legacyV15.settings.mixerRestSec;
-      _data.settings.mixerOnSec = legacyV15.settings.mixerOnSec;
-      _data.settings.coolDownSec = legacyV15.settings.coolDownSec;
-      _data.settings.targetReachedHystC = legacyV15.settings.targetReachedHystC;
-      _data.settings.alertSoundEnabled = legacyV15.settings.alertSoundEnabled;
-      _data.settings.mdnsEnabled = true;
+      _data.settings.heaterPowerW = legacyV16.settings.heaterPowerW;
+      _data.settings.heaterPowerEffW = legacyV16.settings.heaterPowerEffW;
+      _data.settings.heaterTauSec = legacyV16.settings.heaterTauSec;
+      _data.settings.heaterStoreGain = legacyV16.settings.heaterStoreGain;
+      _data.settings.heaterLossWPerC = legacyV16.settings.heaterLossWPerC;
+      _data.settings.heaterAmbientC = legacyV16.settings.heaterAmbientC;
+      _data.settings.heaterDeadband = legacyV16.settings.heaterDeadband;
+      _data.settings.heaterMinSwitchSec = legacyV16.settings.heaterMinSwitchSec;
+      _data.settings.heaterT1 = legacyV16.settings.heaterT1;
+      _data.settings.heaterTau1 = legacyV16.settings.heaterTau1;
+      _data.settings.heaterLossW1 = legacyV16.settings.heaterLossW1;
+      _data.settings.heaterStoreGain1 = legacyV16.settings.heaterStoreGain1;
+      _data.settings.heaterT2 = legacyV16.settings.heaterT2;
+      _data.settings.heaterTau2 = legacyV16.settings.heaterTau2;
+      _data.settings.heaterLossW2 = legacyV16.settings.heaterLossW2;
+      _data.settings.heaterStoreGain2 = legacyV16.settings.heaterStoreGain2;
+      _data.settings.heaterTrimLowC = legacyV16.settings.heaterTrimLowC;
+      _data.settings.heaterTrimHighC = legacyV16.settings.heaterTrimHighC;
+      _data.settings.heaterLossScalePct = legacyV16.settings.heaterLossScalePct;
+      _data.settings.mixerRestSec = legacyV16.settings.mixerRestSec;
+      _data.settings.mixerOnSec = legacyV16.settings.mixerOnSec;
+      _data.settings.coolDownSec = legacyV16.settings.coolDownSec;
+      _data.settings.targetReachedHystC = legacyV16.settings.targetReachedHystC;
+      _data.settings.alertSoundEnabled = legacyV16.settings.alertSoundEnabled;
+      _data.settings.mdnsEnabled = legacyV16.settings.mdnsEnabled;
 
-      _data.profileCount = min(legacyV15.profileCount,
+      _data.profileCount = min(legacyV16.profileCount,
                                (uint8_t)STORAGE_MAX_PROFILES);
-      memcpy(_data.profiles, legacyV15.profiles,
+      memcpy(_data.profiles, legacyV16.profiles,
              sizeof(ProfileEE) * _data.profileCount);
-      Serial.println("Storage: migrated version 15 settings");
+      Serial.println("Storage: migrated version 16 settings");
       save();
       return true;
     }

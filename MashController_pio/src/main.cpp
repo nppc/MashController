@@ -248,8 +248,8 @@ void loop() {
     }
   }
 
-  // Keep the physical outputs in sync with heaterOn/mixerOn every pass,
-  // regardless of which code path last changed them.
+  // Follow heater transitions and keep the physical outputs in sync every pass.
+  updateMixer();
   applyOutputs();
 
   if (sensorUsingFakeMode()) {
@@ -275,7 +275,6 @@ void loop() {
   if (millis() - lastRead > READ_INTERVAL_MS) {
     lastRead = millis();
 
-    updateMixer();
     mashProfileTick();
   }
 }

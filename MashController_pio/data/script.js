@@ -440,6 +440,7 @@ function renderMixerStatus(st) {
 	const badge = document.getElementById('mixerBadge');
 	const autoLabel = document.getElementById('mixerAutoLabel');
 	const manLabel = document.getElementById('mixerManLabel');
+	const heaterIcon = '<svg class="mixer-heater-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 20V9c0-7 4-7 4 0v4c0 5 4 5 4 0V9c0-7 4-7 4 0v4c0 5 4 5 4 0V9c0-7 4-7 4 0v11M6 17h12"/><circle cx="2" cy="20" r="1"/><circle cx="22" cy="20" r="1"/></svg>';
 
 	if (!badge) return;
 
@@ -452,8 +453,16 @@ function renderMixerStatus(st) {
 
 	if (mixerMode === 'manual') {
 		badge.textContent = st.mixerOn ? 'ON' : 'OFF';
+		badge.removeAttribute('aria-label');
+		badge.removeAttribute('title');
+	} else if (st.mixerHeating) {
+		badge.innerHTML = heaterIcon;
+		badge.setAttribute('aria-label', 'Mixer running while heater is on');
+		badge.title = 'Mixer running while heater is on';
 	} else {
 		badge.textContent = Number(st.mixerRemaining || 0);
+		badge.removeAttribute('aria-label');
+		badge.removeAttribute('title');
 	}
 }
 
@@ -1215,6 +1224,9 @@ async function loadSettings() {
         document.getElementById('setMixerRestSec').value =
             settings.mixerRestSec ?? 15;
 
+		document.getElementById('setMixerFollowHeater').checked =
+			settings.mixerFollowHeater ?? false;
+
 		document.getElementById('setCoolDownSec').value =
 			settings.coolDownSec ?? 180;
 
@@ -1378,6 +1390,8 @@ async function saveSettings() {
             mixerRestSec: parseInt(
                 document.getElementById('setMixerRestSec').value
             ),
+
+			mixerFollowHeater: document.getElementById('setMixerFollowHeater').checked,
 
 			coolDownSec: parseInt(
 				document.getElementById('setCoolDownSec').value

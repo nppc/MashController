@@ -1060,6 +1060,12 @@ button:disabled {
     white-space: nowrap;
 }
 
+.device-status-item .heater-badge .mixer-heater-icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
 .device-status-item .heater-badge.manual {
     cursor: pointer;
 }
